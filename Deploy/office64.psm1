@@ -4,7 +4,7 @@
 
 
 .DESCRIPTION
-    (new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/gbtools.psm1') | iex ; Get-HolaMundo
+    (new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/office64.psm1') | iex ; Start-Install
     
    
 
