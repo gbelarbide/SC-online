@@ -12,3 +12,10 @@
     Creation Date:  14/01/2026
 
 #>
+
+#region [Functions]-------------------------------------------------------------
+
+Function Get-HolaMundo {
+    Write-Output "Hola Mundo"
+}
+#endregion
