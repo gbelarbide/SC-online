@@ -45,32 +45,40 @@ Function Test-OfficeInstalled {
     
     # Comprobar en el registro para ClickToRun (Office 365/2016+)
     $registryPaths = @(
-        @{Path = "HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration"; Arch = "64-bit" },
-        @{Path = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Office\ClickToRun\Configuration"; Arch = "32-bit" }
+        "HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration",
+        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Office\ClickToRun\Configuration"
     )
     
-    foreach ($regInfo in $registryPaths) {
-        if (Test-Path -Path $regInfo.Path) {
-            $config = Get-ItemProperty -Path $regInfo.Path -ErrorAction SilentlyContinue
+    foreach ($regPath in $registryPaths) {
+        if (Test-Path -Path $regPath) {
+            $config = Get-ItemProperty -Path $regPath -ErrorAction SilentlyContinue
             
-            if ($config) {
-                # Verificar la plataforma instalada
-                $platform = $config.Platform -replace '\s', ''
+            if ($config -and $config.VersionToReport) {
+                # Verificar la plataforma instalada usando la propiedad Platform
+                $platform = $config.Platform
                 
-                if ($platform -eq "x64" -or $regInfo.Arch -eq "64-bit") {
-                    $result.IsInstalled = $true
+                $result.IsInstalled = $true
+                $result.Version = $config.VersionToReport
+                
+                if ($platform -eq "x64") {
                     $result.Architecture = "64-bit"
-                    $result.Version = $config.VersionToReport
                     Write-Verbose "Office 64-bit encontrado: $($config.VersionToReport)"
-                    return $result
                 }
-                elseif ($platform -eq "x86" -or $regInfo.Arch -eq "32-bit") {
-                    $result.IsInstalled = $true
+                elseif ($platform -eq "x86") {
                     $result.Architecture = "32-bit"
-                    $result.Version = $config.VersionToReport
                     Write-Verbose "Office 32-bit encontrado: $($config.VersionToReport)"
-                    return $result
                 }
+                else {
+                    # Fallback: determinar por la ruta del registro
+                    if ($regPath -like "*WOW6432Node*") {
+                        $result.Architecture = "32-bit"
+                    }
+                    else {
+                        $result.Architecture = "64-bit"
+                    }
+                }
+                
+                return $result
             }
         }
     }
@@ -108,10 +116,15 @@ Function Start-Install {
         de actualización para empresas (MonthlyEnterprise). Incluye Word, Excel, 
         PowerPoint, Outlook, OneNote, Access y Publisher.
         
-        Antes de instalar, comprueba si Office ya está instalado en el sistema:
+        Proceso de instalación cuando se detecta Office 32-bit:
+        - Utiliza el parámetro MigrateArch="TRUE" para migrar automáticamente de 32-bit a 64-bit
+        - La migración preserva la configuración y datos del usuario
+        - No requiere desinstalación manual previa
+        
+        Comportamiento según versión instalada:
         - Si Office 64-bit ya está instalado: Se detiene la instalación
-        - Si Office 32-bit está instalado: Procede con la instalación de 64-bit
-        - Si no hay Office instalado: Procede con la instalación
+        - Si Office 32-bit está instalado: Migra automáticamente a 64-bit
+        - Si no hay Office instalado: Procede con la instalación directamente
         
         Use el parámetro -Force para reinstalar sin importar la versión existente.
     
@@ -123,7 +136,7 @@ Function Start-Install {
     
     .EXAMPLE
         Start-Install
-        Instala Office 64-bit en español. Si detecta Office 32-bit, procede con la instalación.
+        Instala Office 64-bit en español. Si detecta Office 32-bit, migra automáticamente a 64-bit usando MigrateArch.
     
     .EXAMPLE
         Start-Install -InstallPath "D:\Downloads\Office"
@@ -146,6 +159,10 @@ Function Start-Install {
     begin {
         Write-Host "Iniciando instalación de Office 64-bit en castellano..." -ForegroundColor Cyan
         
+        # Variable para controlar si debemos proceder con la instalación
+        $script:shouldProceed = $true
+        $script:needsMigration = $false
+        
         # Comprobar si Office ya está instalado
         if (-not $Force) {
             Write-Host "Comprobando si Office ya está instalado..." -ForegroundColor Yellow
@@ -156,13 +173,16 @@ Function Start-Install {
                     Write-Host "Office 64-bit ya está instalado en el sistema." -ForegroundColor Green
                     Write-Host "Versión: $($officeInfo.Version)" -ForegroundColor Cyan
                     Write-Host "Si desea reinstalar, use el parámetro -Force" -ForegroundColor Yellow
+                    $script:shouldProceed = $false
                     return
                 }
                 elseif ($officeInfo.Architecture -eq "32-bit") {
                     Write-Host "Office 32-bit detectado en el sistema." -ForegroundColor Yellow
                     Write-Host "Versión: $($officeInfo.Version)" -ForegroundColor Cyan
-                    Write-Host "Se procederá a instalar Office 64-bit." -ForegroundColor Green
-                    Write-Host "NOTA: Es recomendable desinstalar Office 32-bit primero para evitar conflictos." -ForegroundColor Yellow
+                    Write-Host "Se migrará automáticamente a Office 64-bit usando MigrateArch." -ForegroundColor Green
+                    
+                    # Marcar que necesitamos migrar de 32-bit a 64-bit
+                    $script:needsMigration = $true
                 }
             }
             else {
@@ -174,18 +194,21 @@ Function Start-Install {
         }
         
         # Crear directorio si no existe
-        if (-not (Test-Path -Path $InstallPath)) {
+        if ($script:shouldProceed -and -not (Test-Path -Path $InstallPath)) {
             New-Item -Path $InstallPath -ItemType Directory -Force | Out-Null
             Write-Host "Directorio creado: $InstallPath" -ForegroundColor Green
         }
     }
     
     process {
+        if (-not $script:shouldProceed) { return }
+        
         try {
             # Crear archivo de configuración XML
+            # MigrateArch="TRUE" permite migrar automáticamente de 32-bit a 64-bit
             $configXML = @"
 <Configuration>
-  <Add OfficeClientEdition="64" Channel="MonthlyEnterprise">
+  <Add OfficeClientEdition="64" Channel="MonthlyEnterprise" MigrateArch="TRUE">
     <Product ID="O365BusinessRetail">
       <Language ID="es-es" />
       <ExcludeApp ID="Groove" />
@@ -221,13 +244,25 @@ Function Start-Install {
             $setupPath = Join-Path -Path $InstallPath -ChildPath "setup.exe"
             Write-Host "Descargando archivos de Office 64-bit..." -ForegroundColor Yellow
             Start-Process -FilePath $setupPath -ArgumentList "/download `"$configPath`"" -Wait -NoNewWindow
-            Write-Host "Archivos de Office descargados" -ForegroundColor Green
+            Write-Host "Archivos de Office descargados correctamente" -ForegroundColor Green
             
-            # Instalar Office
-            Write-Host "Instalando Office 64-bit en castellano..." -ForegroundColor Yellow
+            # Instalar Office (con migración automática si es necesario)
+            if ($script:needsMigration) {
+                Write-Host "`nMigrando de Office 32-bit a 64-bit en castellano..." -ForegroundColor Yellow
+                Write-Host "El parámetro MigrateArch preservará su configuración y datos." -ForegroundColor Cyan
+            }
+            else {
+                Write-Host "`nInstalando Office 64-bit en castellano..." -ForegroundColor Yellow
+            }
+            
             Start-Process -FilePath $setupPath -ArgumentList "/configure `"$configPath`"" -Wait -NoNewWindow
-            Write-Host "Instalación completada exitosamente" -ForegroundColor Green
             
+            if ($script:needsMigration) {
+                Write-Host "Migración completada exitosamente" -ForegroundColor Green
+            }
+            else {
+                Write-Host "Instalación completada exitosamente" -ForegroundColor Green
+            }
         }
         catch {
             Write-Error "Error durante la instalación: $_"
