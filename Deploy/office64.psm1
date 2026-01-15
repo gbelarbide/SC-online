@@ -273,9 +273,40 @@ Function Start-Install {
     }
     
     end {
-        Write-Host "`nInstalación de Office 64-bit finalizada" -ForegroundColor Cyan
-        Write-Host "Canal de actualización: MonthlyEnterprise (Empresas)" -ForegroundColor Cyan
-        Write-Host "Idioma: Español (es-es)" -ForegroundColor Cyan
+        if (-not $script:shouldProceed) { return }
+        
+        Write-Host "`n========================================" -ForegroundColor Cyan
+        Write-Host "Verificando instalación de Office 64-bit" -ForegroundColor Cyan
+        Write-Host "========================================" -ForegroundColor Cyan
+        
+        # Esperar un momento para que el sistema se actualice
+        Start-Sleep -Seconds 3
+        
+        # Verificar la instalación
+        $verificationInfo = Test-OfficeInstalled
+        
+        if ($verificationInfo.IsInstalled -and $verificationInfo.Architecture -eq "64-bit") {
+            Write-Host "`n✓ INSTALACIÓN EXITOSA" -ForegroundColor Green
+            Write-Host "Office 64-bit instalado correctamente" -ForegroundColor Green
+            Write-Host "Versión: $($verificationInfo.Version)" -ForegroundColor Cyan
+            Write-Host "Arquitectura: 64-bit" -ForegroundColor Cyan
+            Write-Host "Canal de actualización: MonthlyEnterprise (Empresas)" -ForegroundColor Cyan
+            Write-Host "Idioma: Español (es-es)" -ForegroundColor Cyan
+        }
+        elseif ($verificationInfo.IsInstalled -and $verificationInfo.Architecture -eq "32-bit") {
+            Write-Host "`n⚠ ADVERTENCIA" -ForegroundColor Yellow
+            Write-Host "Office está instalado pero sigue siendo la versión de 32-bit" -ForegroundColor Yellow
+            Write-Host "Versión: $($verificationInfo.Version)" -ForegroundColor Cyan
+            Write-Host "Es posible que la migración no se haya completado correctamente." -ForegroundColor Yellow
+            Write-Host "Intente ejecutar nuevamente con el parámetro -Force" -ForegroundColor Yellow
+        }
+        else {
+            Write-Host "`n✗ ERROR" -ForegroundColor Red
+            Write-Host "No se pudo verificar la instalación de Office 64-bit" -ForegroundColor Red
+            Write-Host "Por favor, verifique manualmente la instalación." -ForegroundColor Yellow
+        }
+        
+        Write-Host "`n========================================" -ForegroundColor Cyan
     }
 }
 
