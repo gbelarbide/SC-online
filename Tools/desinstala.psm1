@@ -214,5 +214,4 @@ function Start-GbDesintala {
     pause
 }
 
-# Exportar la función principal
-Export-ModuleMember -Function Start-GbDesintala
+

@@ -206,9 +206,10 @@ Function Start-Install {
         try {
             # Crear archivo de configuración XML
             # MigrateArch="TRUE" permite migrar automáticamente de 32-bit a 64-bit
+            # FORCEAPPSHUTDOWN="TRUE" cierra automáticamente las aplicaciones de Office abiertas
             $configXML = @"
 <Configuration>
-  <Add OfficeClientEdition="64" Channel="MonthlyEnterprise" MigrateArch="TRUE">
+  <Add OfficeClientEdition="64" Channel="MonthlyEnterprise" MigrateArch="TRUE" ForceAppShutdown="TRUE">
     <Product ID="O365BusinessRetail">
       <Language ID="es-es" />
       <ExcludeApp ID="Groove" />
@@ -218,6 +219,7 @@ Function Start-Install {
   </Add>
   <Display Level="Full" AcceptEULA="TRUE" />
   <Property Name="AUTOACTIVATE" Value="1" />
+  <Property Name="FORCEAPPSHUTDOWN" Value="TRUE" />
   <Updates Enabled="TRUE" Channel="MonthlyEnterprise" />
   <RemoveMSI />
 </Configuration>
