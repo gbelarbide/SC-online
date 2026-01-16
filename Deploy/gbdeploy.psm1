@@ -104,7 +104,7 @@ function Show-UserPrompt {
     
     .DESCRIPTION
         Esta funcion muestra un cuadro de dialogo interactivo al usuario activo cuando se ejecuta en el contexto de SYSTEM.
-        Utiliza VBScript para crear un MessageBox con botones personalizables y devuelve la respuesta del usuario.
+        Utiliza mshta.exe (Microsoft HTML Application) para crear un dialogo visible en la sesion del usuario.
     
     .PARAMETER Message
         El mensaje que se mostrara al usuario.
@@ -116,8 +116,6 @@ function Show-UserPrompt {
         Tipo de botones a mostrar. Valores validos:
         - OKCancel (OK y Cancelar)
         - YesNo (Si y No)
-        - YesNoCancel (Si, No y Cancelar)
-        - RetryCancel (Reintentar y Cancelar)
         Por defecto: OKCancel
     
     .PARAMETER Icon
@@ -131,7 +129,8 @@ function Show-UserPrompt {
     .PARAMETER TimeoutSeconds
         Tiempo en segundos antes de que el dialogo se cierre automaticamente.
         Si se alcanza el timeout, se considera como "Cancelar".
-        Por defecto: 300 (5 minutos)
+        0 = sin timeout
+        Por defecto: 0
     
     .EXAMPLE
         $result = Show-UserPrompt -Message "¿Desea continuar con la instalacion?" -Title "Confirmacion"
@@ -146,7 +145,7 @@ function Show-UserPrompt {
         }
     
     .OUTPUTS
-        String - Devuelve la respuesta del usuario: "OK", "Cancel", "Yes", "No", "Retry", o "Timeout"
+        String - Devuelve la respuesta del usuario: "OK", "Cancel", "Yes", "No", o "Timeout"
     #>
     [CmdletBinding()]
     param(
@@ -157,7 +156,7 @@ function Show-UserPrompt {
         [string]$Title = "Confirmacion del Sistema",
         
         [Parameter(Mandatory = $false)]
-        [ValidateSet("OKCancel", "YesNo", "YesNoCancel", "RetryCancel")]
+        [ValidateSet("OKCancel", "YesNo")]
         [string]$Buttons = "OKCancel",
         
         [Parameter(Mandatory = $false)]
@@ -165,79 +164,163 @@ function Show-UserPrompt {
         [string]$Icon = "Question",
         
         [Parameter(Mandatory = $false)]
-        [int]$TimeoutSeconds = 300
+        [int]$TimeoutSeconds = 0
     )
     
     try {
-        # Obtener el usuario activo
-        $activeUser = (Get-WmiObject -Class Win32_ComputerSystem).UserName
-        
-        if (-not $activeUser) {
-            Write-Warning "No se encontro un usuario activo en el sistema."
-            return "Cancel"
-        }
-        
-        # Extraer solo el nombre de usuario (sin dominio)
-        $userName = $activeUser.Split('\')[-1]
-        
-        # Mapear tipos de botones a valores VBScript
-        $buttonValues = @{
-            "OKCancel"    = 1
-            "YesNo"       = 4
-            "YesNoCancel" = 3
-            "RetryCancel" = 5
-        }
-        
-        # Mapear iconos a valores VBScript
-        $iconValues = @{
-            "Error"       = 16
-            "Question"    = 32
-            "Warning"     = 48
-            "Information" = 64
-        }
-        
-        $buttonValue = $buttonValues[$Buttons]
-        $iconValue = $iconValues[$Icon]
-        $style = $buttonValue + $iconValue
-        
-        # Crear script VBScript temporal
-        $vbsPath = "$env:TEMP\UserPrompt_$(Get-Random).vbs"
+        # Crear archivo temporal para el resultado
         $resultPath = "$env:TEMP\UserPrompt_Result_$(Get-Random).txt"
         
-        $vbsScript = @"
-Dim objShell, result
-Set objShell = CreateObject("WScript.Shell")
-
-result = MsgBox("$Message", $style, "$Title")
-
-' Escribir resultado en archivo
-Dim fso, file
-Set fso = CreateObject("Scripting.FileSystemObject")
-Set file = fso.CreateTextFile("$resultPath", True)
-file.WriteLine result
-file.Close
-
-WScript.Quit
+        # Escapar caracteres especiales para HTML
+        $escapedMessage = $Message -replace '"', '&quot;' -replace '<', '&lt;' -replace '>', '&gt;' -replace "'", "&#39;"
+        $escapedTitle = $Title -replace '"', '&quot;' -replace '<', '&lt;' -replace '>', '&gt;' -replace "'", "&#39;"
+        
+        # Determinar los botones y el icono
+        $button1Text = if ($Buttons -eq "YesNo") { "Si" } else { "OK" }
+        $button2Text = if ($Buttons -eq "YesNo") { "No" } else { "Cancelar" }
+        $button1Value = if ($Buttons -eq "YesNo") { "Yes" } else { "OK" }
+        $button2Value = if ($Buttons -eq "YesNo") { "No" } else { "Cancel" }
+        
+        # Seleccionar icono
+        $iconSymbol = switch ($Icon) {
+            "Error" { "&#10060;" }  # ❌
+            "Warning" { "&#9888;" }  # ⚠
+            "Information" { "&#8505;" }  # ℹ
+            default { "&#10067;" }  # ❓
+        }
+        
+        # Crear HTML para mshta
+        $htaContent = @"
+<html>
+<head>
+    <title>$escapedTitle</title>
+    <HTA:APPLICATION 
+        ID="oHTA"
+        APPLICATIONNAME="UserPrompt"
+        BORDER="dialog"
+        BORDERSTYLE="normal"
+        CAPTION="yes"
+        ICON=""
+        MAXIMIZEBUTTON="no"
+        MINIMIZEBUTTON="no"
+        SHOWINTASKBAR="yes"
+        SINGLEINSTANCE="yes"
+        SYSMENU="yes"
+        WINDOWSTATE="normal"
+    />
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            max-width: 400px;
+        }
+        .icon {
+            font-size: 48px;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        .message {
+            font-size: 14px;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #333;
+        }
+        .buttons {
+            text-align: center;
+        }
+        button {
+            padding: 8px 20px;
+            margin: 0 5px;
+            font-size: 14px;
+            border: 1px solid #0078d4;
+            background: #0078d4;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            min-width: 80px;
+        }
+        button:hover {
+            background: #106ebe;
+        }
+        button.cancel {
+            background: #6c757d;
+            border-color: #6c757d;
+        }
+        button.cancel:hover {
+            background: #5a6268;
+        }
+    </style>
+    <script type="text/javascript">
+        var timeoutSeconds = $TimeoutSeconds;
+        var timeoutTimer = null;
+        
+        function resizeWindow() {
+            window.resizeTo(450, 250);
+            window.moveTo((screen.width - 450) / 2, (screen.height - 250) / 2);
+        }
+        
+        function writeResult(result) {
+            var fso = new ActiveXObject("Scripting.FileSystemObject");
+            var file = fso.CreateTextFile("$($resultPath -replace '\\', '\\')", true);
+            file.WriteLine(result);
+            file.Close();
+            window.close();
+        }
+        
+        function onButton1() {
+            writeResult("$button1Value");
+        }
+        
+        function onButton2() {
+            writeResult("$button2Value");
+        }
+        
+        function onTimeout() {
+            writeResult("Timeout");
+        }
+        
+        window.onload = function() {
+            resizeWindow();
+            if (timeoutSeconds > 0) {
+                timeoutTimer = setTimeout(onTimeout, timeoutSeconds * 1000);
+            }
+        };
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">$iconSymbol</div>
+        <div class="message">$escapedMessage</div>
+        <div class="buttons">
+            <button onclick="onButton1()">$button1Text</button>
+            <button class="cancel" onclick="onButton2()">$button2Text</button>
+        </div>
+    </div>
+</body>
+</html>
 "@
         
-        # Guardar el script VBScript
-        Set-Content -Path $vbsPath -Value $vbsScript -Encoding ASCII
+        # Guardar el archivo HTA
+        $htaPath = "$env:TEMP\UserPrompt_$(Get-Random).hta"
+        Set-Content -Path $htaPath -Value $htaContent -Encoding UTF8 -Force
         
-        # Crear tarea programada temporal para ejecutar en el contexto del usuario
-        $taskName = "UserPrompt_$(Get-Random)"
-        
-        # Ejecutar el script VBScript en la sesion del usuario usando schtasks
-        $action = "wscript.exe `"$vbsPath`""
-        
-        # Crear y ejecutar la tarea
-        schtasks /create /tn $taskName /tr $action /sc once /st 00:00 /ru $activeUser /rl highest /f | Out-Null
-        schtasks /run /tn $taskName | Out-Null
+        # Ejecutar mshta
+        $process = Start-Process -FilePath "mshta.exe" -ArgumentList "`"$htaPath`"" -PassThru
         
         # Esperar a que el usuario responda o se alcance el timeout
+        $maxWait = if ($TimeoutSeconds -gt 0) { $TimeoutSeconds + 5 } else { 300 }
         $elapsed = 0
         $checkInterval = 1
         
-        while ($elapsed -lt $TimeoutSeconds) {
+        while ($elapsed -lt $maxWait) {
             Start-Sleep -Seconds $checkInterval
             $elapsed += $checkInterval
             
@@ -245,40 +328,34 @@ WScript.Quit
                 break
             }
             
-            # Verificar si la tarea sigue en ejecucion
-            $taskStatus = schtasks /query /tn $taskName /fo csv | ConvertFrom-Csv
-            if ($taskStatus.Status -notmatch "Running") {
-                Start-Sleep -Seconds 2  # Esperar un poco mas para asegurar que el archivo se escriba
+            # Verificar si el proceso sigue en ejecucion
+            if ($process.HasExited) {
+                Start-Sleep -Seconds 1
                 break
             }
         }
         
+        # Si se alcanzo el timeout maximo, matar el proceso
+        if ($elapsed -ge $maxWait -and -not $process.HasExited) {
+            $process.Kill()
+            Write-Warning "Se alcanzo el timeout maximo esperando la respuesta del usuario."
+        }
+        
         # Leer el resultado
-        $userResponse = "Timeout"
+        $userResponse = "Cancel"
         
         if (Test-Path $resultPath) {
-            $resultValue = Get-Content $resultPath -Raw
-            $resultValue = $resultValue.Trim()
+            $resultValue = (Get-Content $resultPath -Raw).Trim()
             
-            # Mapear valores de retorno VBScript a texto legible
-            switch ($resultValue) {
-                "1" { $userResponse = "OK" }
-                "2" { $userResponse = "Cancel" }
-                "3" { $userResponse = "Abort" }
-                "4" { $userResponse = "Retry" }
-                "5" { $userResponse = "Ignore" }
-                "6" { $userResponse = "Yes" }
-                "7" { $userResponse = "No" }
-                "-1" { $userResponse = "Timeout" }
-                default { $userResponse = "Cancel" }
+            if (-not [string]::IsNullOrWhiteSpace($resultValue)) {
+                $userResponse = $resultValue
             }
         }
         
-        # Limpiar archivos temporales y tarea
+        # Limpiar archivos temporales
         try {
-            if (Test-Path $vbsPath) { Remove-Item $vbsPath -Force -ErrorAction SilentlyContinue }
+            if (Test-Path $htaPath) { Remove-Item $htaPath -Force -ErrorAction SilentlyContinue }
             if (Test-Path $resultPath) { Remove-Item $resultPath -Force -ErrorAction SilentlyContinue }
-            schtasks /delete /tn $taskName /f 2>$null | Out-Null
         }
         catch {
             # Ignorar errores de limpieza
