@@ -187,7 +187,8 @@ function Show-UserPrompt {
         $resultPath = "$tempFolder\UserPrompt_Result_$(Get-Random).txt"
         
         # Escapar caracteres especiales para VBScript
-        $escapedMessage = $Message -replace '"', '""'
+        # Reemplazar saltos de linea con el codigo VBScript apropiado
+        $escapedMessage = $Message -replace '"', '""' -replace '\r?\n', '" & vbCrLf & "'
         $escapedTitle = $Title -replace '"', '""'
         
         # Mapear tipos de botones a valores VBScript MsgBox
