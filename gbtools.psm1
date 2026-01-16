@@ -33,12 +33,12 @@ Function Get-GbHelp {
     
     $functions = @(
         [PSCustomObject]@{
-            Función     = "Get-GbHelp"
-            Descripción = "Muestra esta ayuda con las funciones disponibles"
+            Funcion     = "Get-GbHelp"
+            Descripcion = "Muestra esta ayuda con las funciones disponibles"
         },
         [PSCustomObject]@{
-            Función     = "Start-GbDesintala"
-            Descripción = "Descarga y ejecuta el módulo de desinstalación de aplicaciones"
+            Funcion     = "Start-GbDesintala"
+            Descripcion = "Descarga y ejecuta el módulo de desinstalación de aplicaciones"
         }
     )
     
