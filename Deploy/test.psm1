@@ -1,10 +1,21 @@
 <#
 .SYNOPSIS
-    Módulo de testeo para instalación de Office 64-bit
+    Módulo de TESTING/SIMULACIÓN para instalación de Office 64-bit
 
 .DESCRIPTION
-    Módulo para probar el flujo de instalación de Office 64-bit sin ejecutar la instalación real.
-    Útil para verificar prerequisitos, configuración y flujo de trabajo.
+    ⚠️ IMPORTANTE: Este módulo es SOLO para TESTING y NO INSTALA NADA REAL.
+    
+    Simula todo el flujo de instalación de Office 64-bit sin ejecutar instalaciones reales:
+    - Verifica prerequisitos del sistema
+    - Simula descarga de archivos ODT y Office
+    - Simula la ejecución de setup.exe
+    - Verifica el estado actual del sistema
+    
+    Útil para:
+    - Probar el flujo de trabajo antes de ejecutar la instalación real
+    - Verificar prerequisitos sin modificar el sistema
+    - Validar configuración XML y parámetros
+    - Entrenar/demostrar el proceso de instalación
     
     Uso remoto:
     (new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/test.psm1') | iex ; Start-Deploy
@@ -13,6 +24,7 @@
     Version:        0.1.0
     Author:         Garikoitz Belarbide    
     Creation Date:  16/01/2026
+    Purpose:        TESTING ONLY - No realiza instalaciones reales
 
 #>
 

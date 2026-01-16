@@ -651,13 +651,21 @@ function Start-GbDeploy {
             
             # Ejecutar la instalacion
             Write-Host "Ejecutando instalacion de $Name..." -ForegroundColor Green
-            Invoke-GbDeployment -Name $Name
+            $deployResult = Invoke-GbDeployment -Name $Name
+            
+            # Guardar resultado en el registro
+            Save-DeploymentResult -AppName $Name -Result $deployResult | Out-Null
             
             # Eliminar la tarea programada
             Write-Verbose "Eliminando tarea programada..."
             Remove-GbScheduledTask -TaskName $taskName -Force -ErrorAction SilentlyContinue
             
-            Write-Host "Despliegue de $Name completado." -ForegroundColor Green
+            if ($deployResult.Success) {
+                Write-Host "Despliegue de $Name completado exitosamente." -ForegroundColor Green
+            }
+            else {
+                Write-Warning "El despliegue de $Name finalizo con errores: $($deployResult.Message)"
+            }
         }
         else {
             # EJECUCIONES INTERMEDIAS: Preguntar al usuario
@@ -672,13 +680,21 @@ function Start-GbDeploy {
                 
                 # Ejecutar la instalacion
                 Write-Host "Ejecutando instalacion de $Name..." -ForegroundColor Green
-                Invoke-GbDeployment -Name $Name
+                $deployResult = Invoke-GbDeployment -Name $Name
+                
+                # Guardar resultado en el registro
+                Save-DeploymentResult -AppName $Name -Result $deployResult | Out-Null
                 
                 # Eliminar la tarea programada
                 Write-Verbose "Eliminando tarea programada..."
                 Remove-GbScheduledTask -TaskName $taskName -Force -ErrorAction SilentlyContinue
                 
-                Write-Host "Despliegue de $Name completado." -ForegroundColor Green
+                if ($deployResult.Success) {
+                    Write-Host "Despliegue de $Name completado exitosamente." -ForegroundColor Green
+                }
+                else {
+                    Write-Warning "El despliegue de $Name finalizo con errores: $($deployResult.Message)"
+                }
             }
             else {
                 # Usuario rechazo: Programar siguiente ejecucion
@@ -757,18 +773,114 @@ function Invoke-GbDeployment {
         # Ejecutar el modulo
         Invoke-Expression $moduleContent
         
-        # Intentar ejecutar la funcion Start-Install si existe
-        if (Get-Command Start-Install -ErrorAction SilentlyContinue) {
+        # Intentar ejecutar la funcion Start-Deploy o Start-Install si existe
+        $deployResult = $null
+        
+        if (Get-Command Start-Deploy -ErrorAction SilentlyContinue) {
+            Write-Host "Ejecutando Start-Deploy..." -ForegroundColor Green
+            $deployResult = Start-Deploy
+        }
+        elseif (Get-Command Start-Install -ErrorAction SilentlyContinue) {
             Write-Host "Ejecutando Start-Install..." -ForegroundColor Green
             Start-Install
+            # Start-Install no devuelve resultado, asumir exito si no hay excepcion
+            $deployResult = [PSCustomObject]@{
+                Success = $true
+                Message = "Instalacion completada (Start-Install)"
+            }
         }
         else {
-            Write-Warning "No se encontro la funcion Start-Install en el modulo $Name"
+            Write-Warning "No se encontro la funcion Start-Deploy ni Start-Install en el modulo $Name"
+            $deployResult = [PSCustomObject]@{
+                Success = $false
+                Message = "No se encontro funcion de instalacion en el modulo"
+            }
         }
+        
+        return $deployResult
     }
     catch {
         Write-Error "Error al ejecutar el despliegue de $Name : $_"
-        throw
+        return [PSCustomObject]@{
+            Success = $false
+            Message = "Error: $($_.Exception.Message)"
+        }
+    }
+}
+
+function Save-DeploymentResult {
+    <#
+    .SYNOPSIS
+        Guarda el resultado del despliegue en el registro de Windows.
+    
+    .DESCRIPTION
+        Guarda el resultado del despliegue en formato JSON en la clave de registro
+        HKLM:\SOFTWARE\ondoan\Deployments\<AppName>
+    
+    .PARAMETER AppName
+        Nombre de la aplicacion desplegada
+    
+    .PARAMETER Result
+        Objeto con el resultado del despliegue
+    
+    .EXAMPLE
+        Save-DeploymentResult -AppName "office64" -Result $deployResult
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$AppName,
+        
+        [Parameter(Mandatory = $true)]
+        [PSCustomObject]$Result
+    )
+    
+    try {
+        # Crear la clave base si no existe
+        $basePath = "HKLM:\SOFTWARE\ondoan"
+        if (-not (Test-Path $basePath)) {
+            New-Item -Path $basePath -Force | Out-Null
+            Write-Verbose "Clave de registro creada: $basePath"
+        }
+        
+        # Crear subclave para deployments
+        $deploymentsPath = "$basePath\Deployments"
+        if (-not (Test-Path $deploymentsPath)) {
+            New-Item -Path $deploymentsPath -Force | Out-Null
+            Write-Verbose "Clave de registro creada: $deploymentsPath"
+        }
+        
+        # Crear o actualizar la clave para esta aplicacion
+        $appPath = "$deploymentsPath\$AppName"
+        if (-not (Test-Path $appPath)) {
+            New-Item -Path $appPath -Force | Out-Null
+            Write-Verbose "Clave de registro creada: $appPath"
+        }
+        
+        # Preparar datos para guardar
+        $resultData = @{
+            AppName   = $AppName
+            Timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+            Success   = $Result.Success
+            Result    = $Result
+        }
+        
+        # Convertir a JSON
+        $jsonResult = $resultData | ConvertTo-Json -Depth 10 -Compress
+        
+        # Guardar en el registro
+        Set-ItemProperty -Path $appPath -Name "LastDeployment" -Value $jsonResult -Type String
+        Set-ItemProperty -Path $appPath -Name "LastDeploymentDate" -Value (Get-Date).ToString("yyyy-MM-dd HH:mm:ss") -Type String
+        Set-ItemProperty -Path $appPath -Name "Success" -Value $Result.Success.ToString() -Type String
+        
+        Write-Host "Resultado guardado en el registro: $appPath" -ForegroundColor Green
+        Write-Verbose "JSON guardado: $jsonResult"
+        
+        return $true
+    }
+    catch {
+        Write-Error "Error al guardar el resultado en el registro: $_"
+        return $false
     }
 }
 
