@@ -1,6 +1,6 @@
 
 #(new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/gbdeploy.psm1') | Invoke-Expression
-(new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/[Name].psm1') | Invoke-Expression
+
 function Show-UserMessage {
     <#
     .SYNOPSIS
