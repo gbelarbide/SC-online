@@ -766,8 +766,11 @@ function Invoke-GbDeployment {
     try {
         Write-Host "Descargando modulo de despliegue para $Name..." -ForegroundColor Cyan
         
+        # Convertir nombre a minusculas (GitHub es case-sensitive)
+        $moduleName = $Name.ToLower()
+        
         # Descargar el modulo desde GitHub
-        $url = "https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/$Name.psm1"
+        $url = "https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/$moduleName.psm1"
         $moduleContent = (new-object Net.WebClient).DownloadString($url)
         
         # Ejecutar el modulo
