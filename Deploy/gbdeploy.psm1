@@ -673,13 +673,19 @@ function Start-GbDeploy {
     
     .PARAMETER N
         Numero total de intentos antes de la instalacion forzada.
+        Si no se especifica, se obtiene de Get-DeployCnf del modulo.
     
     .PARAMETER Every
         Intervalo en minutos entre cada intento.
+        Si no se especifica, se obtiene de Get-DeployCnf del modulo.
     
     .PARAMETER Message
         Mensaje personalizado a mostrar en el dialogo de confirmacion.
-        Si no se especifica, se usa un mensaje por defecto.
+        Si no se especifica, se obtiene de Get-DeployCnf del modulo (si existe).
+    
+    .EXAMPLE
+        Start-GbDeploy -Name "office64"
+        # Usa configuracion por defecto de Get-DeployCnf del modulo office64
     
     .EXAMPLE
         Start-GbDeploy -Name "office64" -N 5 -Every 60
@@ -698,17 +704,64 @@ function Start-GbDeploy {
         [Parameter(Mandatory = $true)]
         [string]$Name,
         
-        [Parameter(Mandatory = $true)]
-        [int]$N,
+        [Parameter(Mandatory = $false)]
+        [int]$N = 0,
         
-        [Parameter(Mandatory = $true)]
-        [int]$Every,
+        [Parameter(Mandatory = $false)]
+        [int]$Every = 0,
         
         [Parameter(Mandatory = $false)]
         [string]$Message = ""
     )
     
     try {
+        # Si no se especificaron N o Every, intentar obtener de Get-DeployCnf
+        if ($N -eq 0 -or $Every -eq 0) {
+            Write-Verbose "Parametros N o Every no especificados, intentando obtener de Get-DeployCnf..."
+            
+            try {
+                # Descargar el modulo para obtener la configuracion
+                $moduleName = $Name.ToLower()
+                $url = "https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/$moduleName.psm1"
+                Write-Verbose "Descargando modulo desde: $url"
+                $moduleContent = (new-object Net.WebClient).DownloadString($url)
+                
+                # Ejecutar el modulo
+                Invoke-Expression $moduleContent
+                
+                # Intentar obtener configuracion
+                if (Get-Command Get-DeployCnf -ErrorAction SilentlyContinue) {
+                    $config = Get-DeployCnf
+                    
+                    if ($N -eq 0 -and $config.N) {
+                        $N = $config.N
+                        Write-Verbose "N obtenido de Get-DeployCnf: $N"
+                    }
+                    
+                    if ($Every -eq 0 -and $config.Every) {
+                        $Every = $config.Every
+                        Write-Verbose "Every obtenido de Get-DeployCnf: $Every"
+                    }
+                    
+                    if ([string]::IsNullOrWhiteSpace($Message) -and $config.Message) {
+                        $Message = $config.Message
+                        Write-Verbose "Message obtenido de Get-DeployCnf: $Message"
+                    }
+                }
+                else {
+                    Write-Warning "No se encontro la funcion Get-DeployCnf en el modulo $Name"
+                }
+            }
+            catch {
+                Write-Warning "Error al obtener configuracion de Get-DeployCnf: $_"
+            }
+        }
+        
+        # Validar que ahora tenemos valores para N y Every
+        if ($N -eq 0 -or $Every -eq 0) {
+            throw "Los parametros N y Every son obligatorios si no se pueden obtener de Get-DeployCnf. N=$N, Every=$Every"
+        }
+        
         $taskName = "Deploy_$Name"
         $taskPath = "\Ondoan\"
         
