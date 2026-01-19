@@ -334,9 +334,8 @@ function Show-UserPrompt {
         
         
         window.onload = function() {
-            // Calcular tamaño necesario basado en contenido (compatible con IE antiguo)
-            var containers = document.getElementsByClassName('container');
-            var container = containers[0];
+            // Calcular tamaño necesario basado en contenido (compatible con IE5+)
+            var container = document.getElementById('mainContainer');
             var contentHeight = container.scrollHeight + 100; // +100 para padding y margenes
             var contentWidth = 600; // Ancho fijo razonable
             
@@ -355,7 +354,7 @@ function Show-UserPrompt {
     </script>
 </head>
 <body>
-    <div class="container">
+    <div id="mainContainer" class="container">
         <div class="message">$escapedMessage</div>
         <div id="countdown" class="countdown">Tiempo restante: $(if ($TimeoutSeconds -ge 3600) { [Math]::Floor($TimeoutSeconds / 3600).ToString() + ':' } else { '' })$([Math]::Floor(($TimeoutSeconds % 3600) / 60).ToString('00')):$($TimeoutSeconds % 60).ToString('00')</div>
         <div class="buttons">
