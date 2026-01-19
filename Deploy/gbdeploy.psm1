@@ -240,8 +240,9 @@ WScript.Quit
 "@
         
         # Guardar el script VBScript en la ubicacion accesible
+        # Usar UTF8 para soportar acentos correctamente
         $vbsPath = "$tempFolder\UserPrompt_$(Get-Random).vbs"
-        Set-Content -Path $vbsPath -Value $vbsContent -Encoding ASCII -Force
+        Set-Content -Path $vbsPath -Value $vbsContent -Encoding UTF8 -Force
         
         if (-not $isSystem) {
             # Si NO estamos ejecutando como SYSTEM, ejecutar directamente
@@ -696,8 +697,8 @@ function Start-GbDeploy {
                 $userMessage = "$Message`n`n¿Desea instalar $Name ahora?`n`nSi selecciona 'Cancelar', se le volvera a preguntar en $Every minutos.`n`nIntentos restantes: $($N - $currentAttempt)"
             }
             
-            # Preguntar al usuario
-            $response = Show-UserPrompt -Message $userMessage -Title "Instalacion de $Name" -Buttons "OKCancel" -Icon "Question"
+            # Preguntar al usuario (timeout de 30 minutos)
+            $response = Show-UserPrompt -Message $userMessage -Title "Instalacion de $Name" -Buttons "OKCancel" -Icon "Question" -TimeoutSeconds 1800
             
             if ($response -eq "OK") {
                 # Usuario acepto: Ejecutar instalacion y eliminar tarea
