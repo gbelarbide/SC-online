@@ -240,13 +240,14 @@ function Show-UserPrompt {
             margin: 0;
             padding: 20px;
             background-color: #f0f0f0;
+            overflow: auto;
         }
         .container {
             background-color: white;
             padding: 30px;
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            max-width: 500px;
+            max-width: 550px;
             margin: 0 auto;
         }
         .message {
@@ -330,10 +331,20 @@ function Show-UserPrompt {
             window.close();
         }
         
+        
         window.onload = function() {
-            // Centrar ventana
-            window.resizeTo(550, 350);
-            window.moveTo((screen.width - 550) / 2, (screen.height - 350) / 2);
+            // Calcular tamaño necesario basado en contenido
+            var container = document.querySelector('.container');
+            var contentHeight = container.scrollHeight + 100; // +100 para padding y margenes
+            var contentWidth = 600; // Ancho fijo razonable
+            
+            // Limitar altura máxima a 80% de la pantalla
+            var maxHeight = screen.height * 0.8;
+            var finalHeight = Math.min(contentHeight, maxHeight);
+            
+            // Redimensionar ventana
+            window.resizeTo(contentWidth, finalHeight);
+            window.moveTo((screen.width - contentWidth) / 2, (screen.height - finalHeight) / 2);
             
             // Iniciar cuenta atrás
             updateCountdown();
