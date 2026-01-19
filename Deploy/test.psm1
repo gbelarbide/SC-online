@@ -3,7 +3,7 @@
     Módulo de TESTING/SIMULACIÓN para instalación de Office 64-bit
 
 .DESCRIPTION
-    ⚠️ IMPORTANTE: Este módulo es SOLO para TESTING y NO INSTALA NADA REAL.
+    [!] IMPORTANTE: Este modulo es SOLO para TESTING y NO INSTALA NADA REAL.
     
     Simula todo el flujo de instalación de Office 64-bit sin ejecutar instalaciones reales:
     - Verifica prerequisitos del sistema
@@ -237,10 +237,10 @@ Function Start-Preinstall {
         # Crear directorio si no existe
         if (-not (Test-Path -Path $InstallPath)) {
             New-Item -Path $InstallPath -ItemType Directory -Force | Out-Null
-            Write-Host "✓ Directorio creado: $InstallPath" -ForegroundColor Green
+            Write-Host "[OK] Directorio creado: $InstallPath" -ForegroundColor Green
         }
         else {
-            Write-Host "✓ Directorio ya existe: $InstallPath" -ForegroundColor Green
+            Write-Host "[OK] Directorio ya existe: $InstallPath" -ForegroundColor Green
         }
         
         # Crear archivo de configuración XML
@@ -265,7 +265,7 @@ Function Start-Preinstall {
         
         $configPath = Join-Path -Path $InstallPath -ChildPath "configuration.xml"
         $configXML | Out-File -FilePath $configPath -Encoding UTF8 -Force
-        Write-Host "✓ Archivo de configuración creado: $configPath" -ForegroundColor Green
+        Write-Host "[OK] Archivo de configuracion creado: $configPath" -ForegroundColor Green
         $result.ConfigXmlPath = $configPath
         
         # Simular descarga de ODT
@@ -309,7 +309,7 @@ Function Start-Preinstall {
         $result.FilesDownloaded = $SimulateOnly
         $result.Success = $true
         
-        Write-Host "`n✓ Preparación simulada completada exitosamente" -ForegroundColor Green
+        Write-Host "`n[OK] Preparacion simulada completada exitosamente" -ForegroundColor Green
         
     }
     catch {
@@ -387,7 +387,7 @@ Function Start-Install {
         if (-not (Test-Path -Path $ConfigXmlPath)) {
             throw "No se encontró el archivo de configuración en: $ConfigXmlPath"
         }
-        Write-Host "✓ Archivo de configuración encontrado" -ForegroundColor Green
+        Write-Host "[OK] Archivo de configuracion encontrado" -ForegroundColor Green
         
         # Mensaje según tipo de instalación
         if ($NeedsMigration) {
@@ -434,10 +434,10 @@ Function Start-Install {
             $result.Success = $true
             
             if ($NeedsMigration) {
-                Write-Host "`n✓ Migración simulada completada exitosamente" -ForegroundColor Green
+                Write-Host "`n[OK] Migracion simulada completada exitosamente" -ForegroundColor Green
             }
             else {
-                Write-Host "`n✓ Instalación simulada completada exitosamente" -ForegroundColor Green
+                Write-Host "`n[OK] Instalacion simulada completada exitosamente" -ForegroundColor Green
             }
             
             Write-Host "Duración simulada: $($result.Duration.ToString('mm\:ss'))" -ForegroundColor Cyan
@@ -577,7 +577,7 @@ Function Start-PostInstall {
                 $result.InstalledVersion = $verificationInfo.Version
                 $result.InstalledArchitecture = "64-bit"
                 
-                Write-Host "`n✓ INSTALACIÓN EXITOSA" -ForegroundColor Green
+                Write-Host "`n[OK] INSTALACION EXITOSA" -ForegroundColor Green
                 Write-Host "Office 64-bit instalado correctamente" -ForegroundColor Green
                 Write-Host "Versión: $($verificationInfo.Version)" -ForegroundColor Cyan
                 Write-Host "Arquitectura: 64-bit" -ForegroundColor Cyan
@@ -586,12 +586,12 @@ Function Start-PostInstall {
                 $result.InstalledVersion = $verificationInfo.Version
                 $result.InstalledArchitecture = "32-bit"
                 
-                Write-Host "`n⚠ ADVERTENCIA" -ForegroundColor Yellow
+                Write-Host "`n[!] ADVERTENCIA" -ForegroundColor Yellow
                 Write-Host "Office está instalado pero sigue siendo la versión de 32-bit" -ForegroundColor Yellow
                 Write-Host "Versión: $($verificationInfo.Version)" -ForegroundColor Cyan
             }
             else {
-                Write-Host "`n✗ ERROR" -ForegroundColor Red
+                Write-Host "`n[X] ERROR" -ForegroundColor Red
                 Write-Host "No se pudo verificar la instalación de Office 64-bit" -ForegroundColor Red
             }
         }
@@ -603,7 +603,7 @@ Function Start-PostInstall {
             try {
                 Remove-Item -Path $InstallPath -Recurse -Force -ErrorAction Stop
                 $result.FilesCleanedUp = $true
-                Write-Host "✓ Archivos temporales eliminados" -ForegroundColor Green
+                Write-Host "[OK] Archivos temporales eliminados" -ForegroundColor Green
             }
             catch {
                 Write-Warning "No se pudieron eliminar todos los archivos temporales: $_"
@@ -696,18 +696,18 @@ Function Start-Deploy {
     }
     
     try {
-        Write-Host "╔════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-        Write-Host "║  TEST: DESPLIEGUE DE MICROSOFT OFFICE 64-BIT               ║" -ForegroundColor Cyan
-        Write-Host "║  Canal: MonthlyEnterprise | Idioma: Español (es-es)       ║" -ForegroundColor Cyan
+        Write-Host "================================================================" -ForegroundColor Cyan
+        Write-Host "  TEST: DESPLIEGUE DE MICROSOFT OFFICE 64-BIT" -ForegroundColor Cyan
+        Write-Host "  Canal: MonthlyEnterprise | Idioma: Espanol (es-es)" -ForegroundColor Cyan
         if ($SimulateOnly) {
-            Write-Host "║  MODO: SIMULACIÓN (No se instalará nada real)              ║" -ForegroundColor Magenta
+            Write-Host "  MODO: SIMULACION (No se instalara nada real)" -ForegroundColor Magenta
         }
-        Write-Host "╚════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+        Write-Host "================================================================" -ForegroundColor Cyan
         Write-Host ""
         
-        # FASE 1: Verificación
-        $deployResult.Phase = "Verificación"
-        Write-Host "═══ FASE 1: VERIFICACIÓN ═══" -ForegroundColor Cyan
+        # FASE 1: Verificacion
+        $deployResult.Phase = "Verificacion"
+        Write-Host "=== FASE 1: VERIFICACION ===" -ForegroundColor Cyan
         $testResult = Test-Installed
         $deployResult.TestResult = $testResult
         
@@ -723,16 +723,16 @@ Function Start-Deploy {
         
         # Decidir si proceder
         if ($testResult.IsInstalled -and $testResult.Architecture -eq "64-bit" -and -not $Force) {
-            Write-Host "`n✓ Office 64-bit ya está instalado" -ForegroundColor Green
+            Write-Host "`n[OK] Office 64-bit ya esta instalado" -ForegroundColor Green
             Write-Host "Versión: $($testResult.Version)" -ForegroundColor Cyan
             Write-Host "Use el parámetro -Force para simular reinstalación" -ForegroundColor Yellow
             $deployResult.Success = $true
             return $deployResult
         }
         
-        # FASE 2: Preparación
-        $deployResult.Phase = "Preparación"
-        Write-Host "`n═══ FASE 2: PREPARACIÓN ═══" -ForegroundColor Cyan
+        # FASE 2: Preparacion
+        $deployResult.Phase = "Preparacion"
+        Write-Host "`n=== FASE 2: PREPARACION ===" -ForegroundColor Cyan
         $preinstallResult = Start-Preinstall -InstallPath $InstallPath -NeedsMigration $testResult.NeedsMigration -SimulateOnly $SimulateOnly
         $deployResult.PreinstallResult = $preinstallResult
         
@@ -740,9 +740,9 @@ Function Start-Deploy {
             throw "Error en la preparación: $($preinstallResult.ErrorMessage)"
         }
         
-        # FASE 3: Instalación
-        $deployResult.Phase = "Instalación"
-        Write-Host "`n═══ FASE 3: INSTALACIÓN ═══" -ForegroundColor Cyan
+        # FASE 3: Instalacion
+        $deployResult.Phase = "Instalacion"
+        Write-Host "`n=== FASE 3: INSTALACION ===" -ForegroundColor Cyan
         $installResult = Start-Install -SetupExePath $preinstallResult.SetupExePath `
             -ConfigXmlPath $preinstallResult.ConfigXmlPath `
             -NeedsMigration $testResult.NeedsMigration `
@@ -753,53 +753,53 @@ Function Start-Deploy {
             throw "Error en la instalación: $($installResult.ErrorMessage)"
         }
         
-        # FASE 4: Verificación Post-Instalación
-        $deployResult.Phase = "Verificación Post-Instalación"
-        Write-Host "`n═══ FASE 4: VERIFICACIÓN POST-INSTALACIÓN ═══" -ForegroundColor Cyan
+        # FASE 4: Verificacion Post-Instalacion
+        $deployResult.Phase = "Verificacion Post-Instalacion"
+        Write-Host "`n=== FASE 4: VERIFICACION POST-INSTALACION ===" -ForegroundColor Cyan
         $postInstallResult = Start-PostInstall -InstallPath $InstallPath -KeepFiles:$KeepTempFiles -SimulateOnly $SimulateOnly
         $deployResult.PostInstallResult = $postInstallResult
         
         if ($postInstallResult.VerificationSuccess) {
             $deployResult.Success = $true
             
-            Write-Host "`n╔════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+            Write-Host "`n================================================================" -ForegroundColor Green
             if ($SimulateOnly) {
-                Write-Host "║  ✓ SIMULACIÓN COMPLETADA EXITOSAMENTE                      ║" -ForegroundColor Green
+                Write-Host "  [OK] SIMULACION COMPLETADA EXITOSAMENTE" -ForegroundColor Green
             }
             else {
-                Write-Host "║  ✓ DESPLIEGUE COMPLETADO EXITOSAMENTE                      ║" -ForegroundColor Green
+                Write-Host "  [OK] DESPLIEGUE COMPLETADO EXITOSAMENTE" -ForegroundColor Green
             }
-            Write-Host "╚════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+            Write-Host "================================================================" -ForegroundColor Green
             Write-Host ""
             Write-Host "Resumen:" -ForegroundColor Cyan
             Write-Host "  Versión: $($postInstallResult.InstalledVersion)" -ForegroundColor Green
             Write-Host "  Arquitectura: $($postInstallResult.InstalledArchitecture)" -ForegroundColor Green
             Write-Host "  Duración de instalación: $($installResult.Duration.ToString('mm\:ss'))" -ForegroundColor Cyan
             Write-Host "  Canal: MonthlyEnterprise (Empresas)" -ForegroundColor Cyan
-            Write-Host "  Idioma: Español (es-es)" -ForegroundColor Cyan
+            Write-Host "  Idioma: Espanol (es-es)" -ForegroundColor Cyan
             
             if ($testResult.NeedsMigration) {
-                Write-Host "  Tipo: Migración de 32-bit a 64-bit" -ForegroundColor Cyan
+                Write-Host "  Tipo: Migracion de 32-bit a 64-bit" -ForegroundColor Cyan
             }
             else {
-                Write-Host "  Tipo: Instalación nueva" -ForegroundColor Cyan
+                Write-Host "  Tipo: Instalacion nueva" -ForegroundColor Cyan
             }
             
             if ($SimulateOnly) {
-                Write-Host "`n  [MODO SIMULACIÓN - No se realizó instalación real]" -ForegroundColor Magenta
+                Write-Host "`n  [MODO SIMULACION - No se realizo instalacion real]" -ForegroundColor Magenta
             }
         }
         else {
-            Write-Host "`n⚠ ADVERTENCIA: La verificación post-instalación falló" -ForegroundColor Yellow
-            Write-Host "La instalación puede no haberse completado correctamente" -ForegroundColor Yellow
+            Write-Host "`n[!] ADVERTENCIA: La verificacion post-instalacion fallo" -ForegroundColor Yellow
+            Write-Host "La instalacion puede no haberse completado correctamente" -ForegroundColor Yellow
         }
     }
     catch {
         $deployResult.ErrorMessage = $_.Exception.Message
         
-        Write-Host "`n╔════════════════════════════════════════════════════════════╗" -ForegroundColor Red
-        Write-Host "║  ✗ ERROR EN EL DESPLIEGUE                                  ║" -ForegroundColor Red
-        Write-Host "╚════════════════════════════════════════════════════════════╝" -ForegroundColor Red
+        Write-Host "`n================================================================" -ForegroundColor Red
+        Write-Host "  [ERROR] ERROR EN EL DESPLIEGUE" -ForegroundColor Red
+        Write-Host "================================================================" -ForegroundColor Red
         Write-Host ""
         Write-Host "Fase: $($deployResult.Phase)" -ForegroundColor Yellow
         Write-Host "Error: $($deployResult.ErrorMessage)" -ForegroundColor Red
@@ -812,5 +812,5 @@ Function Start-Deploy {
 
 #endregion
 
-# Exportar funciones
-Export-ModuleMember -Function Test-Installed, Start-Preinstall, Start-Install, Start-PostInstall, Start-Deploy
+# Exportar funciones (solo cuando se importa como módulo)
+# Export-ModuleMember -Function Test-Installed, Start-Preinstall, Start-Install, Start-PostInstall, Start-Deploy
