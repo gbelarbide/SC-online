@@ -682,4 +682,32 @@ Function Start-Deploy {
     return $deployResult
 }
 
+Function Get-DeployCnf {
+    <#
+    .SYNOPSIS
+        Devuelve la configuracion por defecto para el despliegue de Office 64-bit
+    
+    .DESCRIPTION
+        Esta funcion proporciona los valores por defecto para N, Every y Message
+        que seran utilizados por Start-GbDeploy si no se especifican manualmente.
+    
+    .OUTPUTS
+        PSCustomObject con las propiedades N, Every y Message
+    
+    .EXAMPLE
+        $config = Get-DeployCnf
+        Start-GbDeploy -Name "office64" -N $config.N -Every $config.Every -Message $config.Message
+    #>
+    
+    [CmdletBinding()]
+    [OutputType([PSCustomObject])]
+    param()
+    
+    return [PSCustomObject]@{
+        N       = 5
+        Every   = 60
+        Message = "Se requiere actualizar Office a la version de 64-bit para mejorar el rendimiento y compatibilidad. Durante la actualizacion podras usar tu ordenador, pero no podras usar las aplicaciones de Office."
+    }
+}
+
 #endregion
