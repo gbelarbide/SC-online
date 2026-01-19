@@ -332,9 +332,11 @@ function Show-UserPrompt {
         }
         
         
+        
         window.onload = function() {
-            // Calcular tamaño necesario basado en contenido
-            var container = document.querySelector('.container');
+            // Calcular tamaño necesario basado en contenido (compatible con IE antiguo)
+            var containers = document.getElementsByClassName('container');
+            var container = containers[0];
             var contentHeight = container.scrollHeight + 100; // +100 para padding y margenes
             var contentWidth = 600; // Ancho fijo razonable
             
