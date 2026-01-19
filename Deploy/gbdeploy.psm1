@@ -240,9 +240,10 @@ WScript.Quit
 "@
         
         # Guardar el script VBScript en la ubicacion accesible
-        # Usar UTF8 para soportar acentos correctamente
+        # Usar UTF8 sin BOM para soportar acentos y ser compatible con VBScript
         $vbsPath = "$tempFolder\UserPrompt_$(Get-Random).vbs"
-        Set-Content -Path $vbsPath -Value $vbsContent -Encoding UTF8 -Force
+        $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+        [System.IO.File]::WriteAllText($vbsPath, $vbsContent, $utf8NoBom)
         
         if (-not $isSystem) {
             # Si NO estamos ejecutando como SYSTEM, ejecutar directamente
