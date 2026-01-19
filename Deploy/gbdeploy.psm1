@@ -189,25 +189,10 @@ function Show-UserPrompt {
         
         $resultPath = "$tempFolder\UserPrompt_Result_$(Get-Random).txt"
         
-        # Funcion para convertir caracteres acentuados a ASCII (VBScript no maneja bien UTF8)
-        function ConvertTo-AsciiSafe {
-            param([string]$text)
-            $text = $text -replace 'á', 'a' -replace 'é', 'e' -replace 'í', 'i' -replace 'ó', 'o' -replace 'ú', 'u'
-            $text = $text -replace 'Á', 'A' -replace 'É', 'E' -replace 'Í', 'I' -replace 'Ó', 'O' -replace 'Ú', 'U'
-            $text = $text -replace 'ñ', 'n' -replace 'Ñ', 'N'
-            $text = $text -replace 'ü', 'u' -replace 'Ü', 'U'
-            $text = $text -replace '¿', '' -replace '¡', ''
-            return $text
-        }
-        
-        # Convertir mensajes a ASCII seguro
-        $safeMessage = ConvertTo-AsciiSafe -text $Message
-        $safeTitle = ConvertTo-AsciiSafe -text $Title
-        
         # Escapar caracteres especiales para VBScript
         # Reemplazar saltos de linea con el codigo VBScript apropiado
-        $escapedMessage = $safeMessage -replace '"', '""' -replace '\r?\n', '" & vbCrLf & "'
-        $escapedTitle = $safeTitle -replace '"', '""'
+        $escapedMessage = $Message -replace '"', '""' -replace '\r?\n', '" & vbCrLf & "'
+        $escapedTitle = $Title -replace '"', '""'
         
         # Mapear tipos de botones a valores VBScript MsgBox
         $buttonValue = if ($Buttons -eq "YesNo") { 4 } else { 1 }
@@ -255,10 +240,8 @@ WScript.Quit
 "@
         
         # Guardar el script VBScript en la ubicacion accesible
-        # Usar UTF8 sin BOM para soportar acentos y ser compatible con VBScript
         $vbsPath = "$tempFolder\UserPrompt_$(Get-Random).vbs"
-        $utf8NoBom = New-Object System.Text.UTF8Encoding $false
-        [System.IO.File]::WriteAllText($vbsPath, $vbsContent, $utf8NoBom)
+        Set-Content -Path $vbsPath -Value $vbsContent -Encoding ASCII -Force
         
         if (-not $isSystem) {
             # Si NO estamos ejecutando como SYSTEM, ejecutar directamente
