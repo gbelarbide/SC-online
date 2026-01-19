@@ -1,5 +1,5 @@
 <#
-(new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/gbdeploy.psm1') | Invoke-Expression; Start-GbDeploy -Name "Test" -N 3 -Every 1 -Message "Se va a actualizar Office a la version de 64-bit. Durante la actualizacion podras usar tu ordenador, pero no podras usar las aplicaciones de Office."
+(new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/gbdeploy.psm1') | Invoke-Expression; Start-GbDeploy -Name "Test"
 
 
 #>
@@ -188,29 +188,202 @@ function Show-UserPrompt {
             New-Item -Path $tempFolder -ItemType Directory -Force | Out-Null
         }
         
+        
         $resultPath = "$tempFolder\UserPrompt_Result_$(Get-Random).txt"
         
-        # Escapar caracteres especiales para VBScript
-        # Reemplazar saltos de linea con el codigo VBScript apropiado
-        $escapedMessage = $Message -replace '"', '""' -replace '\r?\n', '" & vbCrLf & "'
-        $escapedTitle = $Title -replace '"', '""'
+        # Decidir si usar HTA (con countdown) o VBScript (sin countdown)
+        $useHTA = ($TimeoutSeconds -gt 0)
         
-        # Mapear tipos de botones a valores VBScript MsgBox
-        $buttonValue = if ($Buttons -eq "YesNo") { 4 } else { 1 }
+        if ($useHTA) {
+            # Usar HTA con cuenta atrás
+            Write-Verbose "Usando HTA con timeout de $TimeoutSeconds segundos"
+            
+            # Escapar mensaje para HTML
+            $escapedMessage = $Message -replace '&', '&amp;' -replace '<', '&lt;' -replace '>', '&gt;' -replace '"', '&quot;' -replace "'", '&#39;' -replace '\r?\n', '<br>'
+            $escapedTitle = $Title -replace '&', '&amp;' -replace '<', '&lt;' -replace '>', '&gt;' -replace '"', '&quot;'
+            
+            # Determinar botones
+            $buttons = if ($Buttons -eq "YesNo") {
+                @"
+                <button onclick="saveResult('Yes')" style="padding: 10px 30px; margin: 5px; font-size: 14px;">Sí</button>
+                <button onclick="saveResult('No')" style="padding: 10px 30px; margin: 5px; font-size: 14px;">No</button>
+"@
+            }
+            else {
+                @"
+                <button onclick="saveResult('OK')" style="padding: 10px 30px; margin: 5px; font-size: 14px;">OK</button>
+                <button onclick="saveResult('Cancel')" style="padding: 10px 30px; margin: 5px; font-size: 14px;">Cancelar</button>
+"@
+            }
+            
+            # Crear contenido HTA
+            $htaContent = @"
+<html>
+<head>
+    <title>$escapedTitle</title>
+    <HTA:APPLICATION
+        APPLICATIONNAME="UserPrompt"
+        BORDER="dialog"
+        BORDERSTYLE="normal"
+        CAPTION="yes"
+        MAXIMIZEBUTTON="no"
+        MINIMIZEBUTTON="no"
+        SCROLL="no"
+        SHOWINTASKBAR="yes"
+        SINGLEINSTANCE="yes"
+        SYSMENU="yes"
+        WINDOWSTATE="normal"
+    />
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        .message {
+            margin-bottom: 20px;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #333;
+        }
+        .countdown {
+            font-size: 24px;
+            font-weight: bold;
+            color: #0078d4;
+            text-align: center;
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f8f8f8;
+            border-radius: 5px;
+        }
+        .buttons {
+            text-align: center;
+            margin-top: 20px;
+        }
+        button {
+            background-color: #0078d4;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        button:hover {
+            background-color: #005a9e;
+        }
+        button:last-child {
+            background-color: #6c757d;
+        }
+        button:last-child:hover {
+            background-color: #5a6268;
+        }
+    </style>
+    <script>
+        var timeLeft = $TimeoutSeconds;
+        var resultPath = "$($resultPath -replace '\\', '\\')";
         
-        # Mapear iconos a valores VBScript MsgBox
-        $iconValue = switch ($Icon) {
-            "Error" { 16 }
-            "Question" { 32 }
-            "Warning" { 48 }
-            "Information" { 64 }
-            default { 32 }
+        function formatTime(seconds) {
+            var hours = Math.floor(seconds / 3600);
+            var minutes = Math.floor((seconds % 3600) / 60);
+            var secs = seconds % 60;
+            
+            if (hours > 0) {
+                return hours + ':' + pad(minutes) + ':' + pad(secs);
+            } else {
+                return minutes + ':' + pad(secs);
+            }
         }
         
-        $style = $buttonValue + $iconValue + 4096  # 4096 = vbSystemModal para que aparezca al frente
+        function pad(num) {
+            return (num < 10 ? '0' : '') + num;
+        }
         
-        # Crear script VBScript que se ejecutara en la sesion del usuario
-        $vbsContent = @"
+        function updateCountdown() {
+            if (timeLeft <= 0) {
+                saveResult('OK');
+                window.close();
+                return;
+            }
+            
+            document.getElementById('countdown').innerText = 'Tiempo restante: ' + formatTime(timeLeft);
+            timeLeft--;
+        }
+        
+        function saveResult(result) {
+            try {
+                var fso = new ActiveXObject('Scripting.FileSystemObject');
+                var file = fso.CreateTextFile(resultPath, true);
+                file.WriteLine(result);
+                file.Close();
+            } catch(e) {
+                // Error al guardar, pero cerrar de todos modos
+            }
+            window.close();
+        }
+        
+        window.onload = function() {
+            // Centrar ventana
+            window.resizeTo(550, 350);
+            window.moveTo((screen.width - 550) / 2, (screen.height - 350) / 2);
+            
+            // Iniciar cuenta atrás
+            updateCountdown();
+            setInterval(updateCountdown, 1000);
+        };
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="message">$escapedMessage</div>
+        <div id="countdown" class="countdown">Tiempo restante: $(if ($TimeoutSeconds -ge 3600) { [Math]::Floor($TimeoutSeconds / 3600).ToString() + ':' } else { '' })$([Math]::Floor(($TimeoutSeconds % 3600) / 60).ToString('00')):$($TimeoutSeconds % 60).ToString('00')</div>
+        <div class="buttons">
+            $buttons
+        </div>
+    </div>
+</body>
+</html>
+"@
+            
+            # Guardar el HTA
+            $htaPath = "$tempFolder\UserPrompt_$(Get-Random).hta"
+            Set-Content -Path $htaPath -Value $htaContent -Encoding UTF8 -Force
+            $scriptPath = $htaPath
+            $scriptExecutable = "mshta.exe"
+        }
+        else {
+            # Usar VBScript tradicional (sin timeout)
+            Write-Verbose "Usando VBScript sin timeout"
+            
+            # Escapar caracteres especiales para VBScript
+            # Reemplazar saltos de linea con el codigo VBScript apropiado
+            $escapedMessage = $Message -replace '"', '""' -replace '\r?\n', '" & vbCrLf & "'
+            $escapedTitle = $Title -replace '"', '""'
+            
+            # Mapear tipos de botones a valores VBScript MsgBox
+            $buttonValue = if ($Buttons -eq "YesNo") { 4 } else { 1 }
+            
+            # Mapear iconos a valores VBScript MsgBox
+            $iconValue = switch ($Icon) {
+                "Error" { 16 }
+                "Question" { 32 }
+                "Warning" { 48 }
+                "Information" { 64 }
+                default { 32 }
+            }
+            
+            $style = $buttonValue + $iconValue + 4096  # 4096 = vbSystemModal para que aparezca al frente
+            
+            # Crear script VBScript que se ejecutara en la sesion del usuario
+            $vbsContent = @"
 Dim objShell, result, fso, file
 Set objShell = CreateObject("WScript.Shell")
 
@@ -239,15 +412,18 @@ file.Close
 
 WScript.Quit
 "@
-        
-        # Guardar el script VBScript en la ubicacion accesible
-        $vbsPath = "$tempFolder\UserPrompt_$(Get-Random).vbs"
-        Set-Content -Path $vbsPath -Value $vbsContent -Encoding ASCII -Force
+            
+            # Guardar el script VBScript en la ubicacion accesible
+            $vbsPath = "$tempFolder\UserPrompt_$(Get-Random).vbs"
+            Set-Content -Path $vbsPath -Value $vbsContent -Encoding ASCII -Force
+            $scriptPath = $vbsPath
+            $scriptExecutable = "wscript.exe"
+        }
         
         if (-not $isSystem) {
             # Si NO estamos ejecutando como SYSTEM, ejecutar directamente
-            Write-Verbose "Ejecutando VBScript directamente en la sesion actual del usuario"
-            $process = Start-Process -FilePath "wscript.exe" -ArgumentList "`"$vbsPath`"" -Wait -PassThru -WindowStyle Hidden
+            Write-Verbose "Ejecutando script directamente en la sesion actual del usuario"
+            $process = Start-Process -FilePath $scriptExecutable -ArgumentList "`"$scriptPath`"" -Wait -PassThru -WindowStyle Hidden
         }
         else {
             # Si estamos ejecutando como SYSTEM, necesitamos ejecutar en la sesion del usuario
@@ -269,7 +445,7 @@ WScript.Quit
             if (Test-Path $psExecPath) {
                 # Ejecutar con PsExec en la sesion interactiva
                 Write-Verbose "Usando PsExec para ejecutar en la sesion $sessionId"
-                $null = Start-Process -FilePath $psExecPath -ArgumentList "-accepteula -s -i $sessionId wscript.exe `"$vbsPath`"" -WindowStyle Hidden -PassThru
+                $null = Start-Process -FilePath $psExecPath -ArgumentList "-accepteula -s -i $sessionId $scriptExecutable `"$scriptPath`"" -WindowStyle Hidden -PassThru
             }
             else {
                 # Metodo alternativo: usar WMI para crear proceso en la sesion del usuario
@@ -277,7 +453,7 @@ WScript.Quit
                 
                 # Crear un script que use schtasks de forma mas directa
                 $batchPath = "$tempFolder\UserPrompt_$(Get-Random).bat"
-                $batchContent = "@echo off`r`nwscript.exe `"$vbsPath`""
+                $batchContent = "@echo off`r`n$scriptExecutable `"$scriptPath`""
                 Set-Content -Path $batchPath -Value $batchContent -Encoding ASCII -Force
                 
                 # Obtener el usuario de la sesion
@@ -329,8 +505,8 @@ WScript.Quit
   </Settings>
   <Actions Context="Author">
     <Exec>
-      <Command>wscript.exe</Command>
-      <Arguments>"$vbsPath"</Arguments>
+      <Command>$scriptExecutable</Command>
+      <Arguments>"$scriptPath"</Arguments>
     </Exec>
   </Actions>
 </Task>
