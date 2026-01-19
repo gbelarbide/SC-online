@@ -131,7 +131,7 @@ function Show-UserPrompt {
     
     .PARAMETER TimeoutSeconds
         Tiempo en segundos antes de que el dialogo se cierre automaticamente.
-        Si se alcanza el timeout, se considera como "Cancelar".
+        Si se alcanza el timeout, se considera como "OK" (Aceptar).
         0 = sin timeout
         Por defecto: 0
     
@@ -148,7 +148,8 @@ function Show-UserPrompt {
         }
     
     .OUTPUTS
-        String - Devuelve la respuesta del usuario: "OK", "Cancel", "Yes", "No", o "Timeout"
+        String - Devuelve la respuesta del usuario: "OK", "Cancel", "Yes", "No"
+        Nota: Si hay timeout, se devuelve "OK" automaticamente
     #>
     [CmdletBinding()]
     param(
@@ -372,7 +373,8 @@ WScript.Quit
         }
         
         # Leer el resultado
-        $userResponse = "Cancel"
+        # Si hay timeout, se considera como aceptar (OK)
+        $userResponse = "OK"
         
         if (Test-Path $resultPath) {
             $resultValue = (Get-Content $resultPath -Raw).Trim()
@@ -382,7 +384,7 @@ WScript.Quit
             }
         }
         else {
-            Write-Warning "No se recibio respuesta del usuario (timeout o error)."
+            Write-Warning "No se recibio respuesta del usuario (timeout). Se considera como aceptar."
         }
         
         # Limpiar archivos temporales y tarea programada
