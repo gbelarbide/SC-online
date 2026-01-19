@@ -189,10 +189,25 @@ function Show-UserPrompt {
         
         $resultPath = "$tempFolder\UserPrompt_Result_$(Get-Random).txt"
         
+        # Funcion para convertir caracteres acentuados a ASCII (VBScript no maneja bien UTF8)
+        function ConvertTo-AsciiSafe {
+            param([string]$text)
+            $text = $text -replace 'á', 'a' -replace 'é', 'e' -replace 'í', 'i' -replace 'ó', 'o' -replace 'ú', 'u'
+            $text = $text -replace 'Á', 'A' -replace 'É', 'E' -replace 'Í', 'I' -replace 'Ó', 'O' -replace 'Ú', 'U'
+            $text = $text -replace 'ñ', 'n' -replace 'Ñ', 'N'
+            $text = $text -replace 'ü', 'u' -replace 'Ü', 'U'
+            $text = $text -replace '¿', '' -replace '¡', ''
+            return $text
+        }
+        
+        # Convertir mensajes a ASCII seguro
+        $safeMessage = ConvertTo-AsciiSafe -text $Message
+        $safeTitle = ConvertTo-AsciiSafe -text $Title
+        
         # Escapar caracteres especiales para VBScript
         # Reemplazar saltos de linea con el codigo VBScript apropiado
-        $escapedMessage = $Message -replace '"', '""' -replace '\r?\n', '" & vbCrLf & "'
-        $escapedTitle = $Title -replace '"', '""'
+        $escapedMessage = $safeMessage -replace '"', '""' -replace '\r?\n', '" & vbCrLf & "'
+        $escapedTitle = $safeTitle -replace '"', '""'
         
         # Mapear tipos de botones a valores VBScript MsgBox
         $buttonValue = if ($Buttons -eq "YesNo") { 4 } else { 1 }
