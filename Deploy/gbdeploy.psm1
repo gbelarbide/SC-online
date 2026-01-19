@@ -732,13 +732,19 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every
                 Write-Verbose "Creando tarea para siguiente ejecucion en $nextRunTime"
                 
                 $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command `"$($scriptBlock.ToString())`""
-                $trigger = New-ScheduledTaskTrigger -Once -At $nextRunTime
+                
+                # Crear dos triggers: uno por tiempo y otro al logon
+                # Esto asegura que si el ordenador se apaga, la tarea se ejecute al iniciar sesion
+                $triggerTime = New-ScheduledTaskTrigger -Once -At $nextRunTime
+                $triggerLogon = New-ScheduledTaskTrigger -AtLogOn
+                
                 $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
                 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
                 
-                Register-ScheduledTask -TaskName $taskName -TaskPath $taskPath -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Description $metadata -Force | Out-Null
+                # Registrar con ambos triggers
+                Register-ScheduledTask -TaskName $taskName -TaskPath $taskPath -Action $action -Trigger @($triggerTime, $triggerLogon) -Principal $principal -Settings $settings -Description $metadata -Force | Out-Null
                 
-                Write-Host "Siguiente intento programado para: $nextRunTime" -ForegroundColor Cyan
+                Write-Host "Siguiente intento programado para: $nextRunTime (o al iniciar sesion)" -ForegroundColor Cyan
             }
         }
     }
