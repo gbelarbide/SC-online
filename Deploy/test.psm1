@@ -299,6 +299,34 @@ Function Start-Deploy {
     }
 }
 
+Function Get-DeployCnf {
+    <#
+    .SYNOPSIS
+        Devuelve la configuracion por defecto para el despliegue de Test
+    
+    .DESCRIPTION
+        Esta funcion proporciona los valores por defecto para N, Every y Message
+        que seran utilizados por Start-GbDeploy si no se especifican manualmente.
+    
+    .OUTPUTS
+        PSCustomObject con las propiedades N, Every y Message
+    
+    .EXAMPLE
+        $config = Get-DeployCnf
+        Start-GbDeploy -Name "test" -N $config.N -Every $config.Every -Message $config.Message
+    #>
+    
+    [CmdletBinding()]
+    [OutputType([PSCustomObject])]
+    param()
+    
+    return [PSCustomObject]@{
+        N       = 3
+        Every   = 60
+        Message = "Se va a actualizar Office a la version de 64-bit. Durante la actualizacion podras usar tu ordenador, pero no podras usar las aplicaciones de Office."
+    }
+}
+
 # Las funciones se exportan automaticamente cuando se ejecuta con iex
 # Si se importa como modulo, descomentar la siguiente linea:
-# Export-ModuleMember -Function Test-Installed, Start-Preinstall, Start-Install, Start-PostInstall, Start-Deploy
+# Export-ModuleMember -Function Test-Installed, Start-Preinstall, Start-Install, Start-PostInstall, Start-Deploy, Get-DeployCnf
