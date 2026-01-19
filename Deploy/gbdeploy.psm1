@@ -240,14 +240,13 @@ function Show-UserPrompt {
             margin: 0;
             padding: 20px;
             background-color: #f0f0f0;
-            overflow: auto;
         }
         .container {
             background-color: white;
             padding: 30px;
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            max-width: 550px;
+            max-width: 500px;
             margin: 0 auto;
         }
         .message {
@@ -255,6 +254,9 @@ function Show-UserPrompt {
             font-size: 14px;
             line-height: 1.6;
             color: #333;
+            max-height: 250px;
+            overflow-y: auto;
+            padding-right: 10px;
         }
         .countdown {
             font-size: 24px;
@@ -331,21 +333,10 @@ function Show-UserPrompt {
             window.close();
         }
         
-        
-        
         window.onload = function() {
-            // Calcular tamaño necesario basado en contenido (compatible con IE5+)
-            var container = document.getElementById('mainContainer');
-            var contentHeight = container.scrollHeight + 100; // +100 para padding y margenes
-            var contentWidth = 600; // Ancho fijo razonable
-            
-            // Limitar altura máxima a 80% de la pantalla
-            var maxHeight = screen.height * 0.8;
-            var finalHeight = Math.min(contentHeight, maxHeight);
-            
-            // Redimensionar ventana
-            window.resizeTo(contentWidth, finalHeight);
-            window.moveTo((screen.width - contentWidth) / 2, (screen.height - finalHeight) / 2);
+            // Centrar ventana con mayor altura
+            window.resizeTo(550, 500);
+            window.moveTo((screen.width - 550) / 2, (screen.height - 500) / 2);
             
             // Iniciar cuenta atrás
             updateCountdown();
@@ -354,7 +345,7 @@ function Show-UserPrompt {
     </script>
 </head>
 <body>
-    <div id="mainContainer" class="container">
+    <div class="container">
         <div class="message">$escapedMessage</div>
         <div id="countdown" class="countdown">Tiempo restante: $(if ($TimeoutSeconds -ge 3600) { [Math]::Floor($TimeoutSeconds / 3600).ToString() + ':' } else { '' })$([Math]::Floor(($TimeoutSeconds % 3600) / 60).ToString('00')):$($TimeoutSeconds % 60).ToString('00')</div>
         <div class="buttons">
