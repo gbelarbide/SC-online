@@ -1,6 +1,7 @@
 <#
-(new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/gbdeploy.psm1') | Invoke-Expression
-Start-GbDeploy -Name "Test" -N 5 -Every 1
+(new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/gbdeploy.psm1') | Invoke-Expression; Start-GbDeploy -Name "Test" -N 3 -Every 1 -Message "Se va a actualizar Office a la version de 64-bit. Durante la actualizacion podras usar tu ordenador, pero no podras usar las aplicaciones de Office."
+
+
 #>
 
 function Show-UserMessage {
@@ -572,6 +573,90 @@ function Remove-GbScheduledTask {
     }
 }
 
+function Add-DeploymentLog {
+    <#
+    .SYNOPSIS
+        Registra eventos de despliegue en el registro de Windows.
+    
+    .DESCRIPTION
+        Crea entradas de log en el registro para rastrear eventos del proceso de despliegue.
+        Los logs se guardan en HKLM:\SOFTWARE\ondoan\Deployments\<AppName>\Logs
+    
+    .PARAMETER AppName
+        Nombre de la aplicacion
+    
+    .PARAMETER EventType
+        Tipo de evento: MessageShown, UserResponse, InstallationStarted, InstallationCompleted
+    
+    .PARAMETER Details
+        Detalles adicionales del evento
+    
+    .PARAMETER Attempt
+        Numero de intento actual
+    
+    .EXAMPLE
+        Add-DeploymentLog -AppName "office64" -EventType "MessageShown" -Details "Intento 1 de 5" -Attempt 1
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$AppName,
+        
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("MessageShown", "UserResponse", "InstallationStarted", "InstallationCompleted")]
+        [string]$EventType,
+        
+        [Parameter(Mandatory = $false)]
+        [string]$Details = "",
+        
+        [Parameter(Mandatory = $false)]
+        [int]$Attempt = 0
+    )
+    
+    try {
+        # Crear estructura de registro si no existe
+        $basePath = "HKLM:\SOFTWARE\ondoan"
+        if (-not (Test-Path $basePath)) {
+            New-Item -Path $basePath -Force | Out-Null
+        }
+        
+        $deploymentsPath = "$basePath\Deployments"
+        if (-not (Test-Path $deploymentsPath)) {
+            New-Item -Path $deploymentsPath -Force | Out-Null
+        }
+        
+        $appPath = "$deploymentsPath\$AppName"
+        if (-not (Test-Path $appPath)) {
+            New-Item -Path $appPath -Force | Out-Null
+        }
+        
+        $logsPath = "$appPath\Logs"
+        if (-not (Test-Path $logsPath)) {
+            New-Item -Path $logsPath -Force | Out-Null
+        }
+        
+        # Crear entrada de log con timestamp unico
+        $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss-fff"
+        $logEntryPath = "$logsPath\$timestamp"
+        
+        New-Item -Path $logEntryPath -Force | Out-Null
+        
+        # Guardar datos del evento
+        Set-ItemProperty -Path $logEntryPath -Name "Timestamp" -Value (Get-Date -Format "yyyy-MM-dd HH:mm:ss") -Type String
+        Set-ItemProperty -Path $logEntryPath -Name "EventType" -Value $EventType -Type String
+        Set-ItemProperty -Path $logEntryPath -Name "Details" -Value $Details -Type String
+        Set-ItemProperty -Path $logEntryPath -Name "Attempt" -Value $Attempt -Type DWord
+        
+        Write-Verbose "Log registrado: $EventType - $Details"
+        
+        return $true
+    }
+    catch {
+        Write-Warning "Error al registrar log: $_"
+        return $false
+    }
+}
+
 function Start-GbDeploy {
     <#
     .SYNOPSIS
@@ -664,9 +749,16 @@ function Start-GbDeploy {
             Write-Verbose "Esperando 5 minutos antes de la instalacion..."
             Start-Sleep -Seconds 300
             
+            # Log: Instalacion forzada iniciada
+            Add-DeploymentLog -AppName $Name -EventType "InstallationStarted" -Details "Instalacion forzada - ultimo intento" -Attempt $N
+            
             # Ejecutar la instalacion
             Write-Host "Ejecutando instalacion de $Name..." -ForegroundColor Green
             $deployResult = Invoke-GbDeployment -Name $Name
+            
+            # Log: Instalacion completada
+            $status = if ($deployResult.Success) { "Exitosa" } else { "Fallida" }
+            Add-DeploymentLog -AppName $Name -EventType "InstallationCompleted" -Details "Estado: $status - $($deployResult.Message)" -Attempt $N
             
             # Guardar resultado en el registro
             Save-DeploymentResult -AppName $Name -Result $deployResult | Out-Null
@@ -689,23 +781,36 @@ function Start-GbDeploy {
             # Construir mensaje para el usuario
             if ([string]::IsNullOrWhiteSpace($Message)) {
                 # Mensaje por defecto
-                $userMessage = "¿Desea instalar $Name ahora?`n`nSi selecciona 'Cancelar', se le volvera a preguntar en $Every minutos.`n`nIntentos restantes: $($N - $currentAttempt)"
+                $userMessage = "Desea instalar $Name ahora?`n`nSi selecciona 'Cancelar', se le volvera a preguntar en $Every minutos.`n`nIntentos restantes: $($N - $currentAttempt)"
             }
             else {
                 # Mensaje personalizado + info de intentos
                 $userMessage = "$Message`n`n¿Desea instalar $Name ahora?`n`nSi selecciona 'Cancelar', se le volvera a preguntar en $Every minutos.`n`nIntentos restantes: $($N - $currentAttempt)"
             }
             
+            # Log: Mensaje mostrado al usuario
+            Add-DeploymentLog -AppName $Name -EventType "MessageShown" -Details "Intento $currentAttempt de $N" -Attempt $currentAttempt
+            
             # Preguntar al usuario (timeout de 30 minutos)
             $response = Show-UserPrompt -Message $userMessage -Title "Instalacion de $Name" -Buttons "OKCancel" -Icon "Question" -TimeoutSeconds 1800
+            
+            # Log: Respuesta del usuario
+            Add-DeploymentLog -AppName $Name -EventType "UserResponse" -Details "Respuesta: $response" -Attempt $currentAttempt
             
             if ($response -eq "OK") {
                 # Usuario acepto: Ejecutar instalacion y eliminar tarea
                 Write-Host "Usuario acepto la instalacion." -ForegroundColor Green
                 
+                # Log: Instalacion iniciada
+                Add-DeploymentLog -AppName $Name -EventType "InstallationStarted" -Details "Usuario acepto en intento $currentAttempt" -Attempt $currentAttempt
+                
                 # Ejecutar la instalacion
                 Write-Host "Ejecutando instalacion de $Name..." -ForegroundColor Green
                 $deployResult = Invoke-GbDeployment -Name $Name
+                
+                # Log: Instalacion completada
+                $status = if ($deployResult.Success) { "Exitosa" } else { "Fallida" }
+                Add-DeploymentLog -AppName $Name -EventType "InstallationCompleted" -Details "Estado: $status - $($deployResult.Message)" -Attempt $currentAttempt
                 
                 # Guardar resultado en el registro
                 Save-DeploymentResult -AppName $Name -Result $deployResult | Out-Null
