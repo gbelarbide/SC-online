@@ -592,6 +592,10 @@ function Start-GbDeploy {
     .PARAMETER Every
         Intervalo en minutos entre cada intento.
     
+    .PARAMETER Message
+        Mensaje personalizado a mostrar en el dialogo de confirmacion.
+        Si no se especifica, se usa un mensaje por defecto.
+    
     .EXAMPLE
         Start-GbDeploy -Name "office64" -N 5 -Every 60
         # Pregunta 4 veces cada hora, en la 5ta vez instala automaticamente
@@ -599,6 +603,10 @@ function Start-GbDeploy {
     .EXAMPLE
         Start-GbDeploy -Name "MyApp" -N 3 -Every 30
         # Pregunta 2 veces cada 30 minutos, en la 3ra vez instala automaticamente
+    
+    .EXAMPLE
+        Start-GbDeploy -Name "office64" -N 5 -Every 60 -Message "Se requiere actualizar Office a la version 64-bit para mejorar el rendimiento."
+        # Usa un mensaje personalizado
     #>
     [CmdletBinding()]
     param(
@@ -609,7 +617,10 @@ function Start-GbDeploy {
         [int]$N,
         
         [Parameter(Mandatory = $true)]
-        [int]$Every
+        [int]$Every,
+        
+        [Parameter(Mandatory = $false)]
+        [string]$Message = ""
     )
     
     try {
@@ -675,8 +686,18 @@ function Start-GbDeploy {
             # EJECUCIONES INTERMEDIAS: Preguntar al usuario
             Write-Host "=== INTENTO $currentAttempt de $N ===" -ForegroundColor Cyan
             
+            # Construir mensaje para el usuario
+            if ([string]::IsNullOrWhiteSpace($Message)) {
+                # Mensaje por defecto
+                $userMessage = "¿Desea instalar $Name ahora?`n`nSi selecciona 'Cancelar', se le volvera a preguntar en $Every minutos.`n`nIntentos restantes: $($N - $currentAttempt)"
+            }
+            else {
+                # Mensaje personalizado + info de intentos
+                $userMessage = "$Message`n`n¿Desea instalar $Name ahora?`n`nSi selecciona 'Cancelar', se le volvera a preguntar en $Every minutos.`n`nIntentos restantes: $($N - $currentAttempt)"
+            }
+            
             # Preguntar al usuario
-            $response = Show-UserPrompt -Message "¿Desea instalar $Name ahora?`n`nSi selecciona 'Cancelar', se le volvera a preguntar en $Every minutos.`n`nIntentos restantes: $($N - $currentAttempt)" -Title "Instalacion de $Name" -Buttons "OKCancel" -Icon "Question"
+            $response = Show-UserPrompt -Message $userMessage -Title "Instalacion de $Name" -Buttons "OKCancel" -Icon "Question"
             
             if ($response -eq "OK") {
                 # Usuario acepto: Ejecutar instalacion y eliminar tarea
@@ -722,9 +743,11 @@ function Start-GbDeploy {
                 }
                 
                 # Crear el script que se ejecutara en la tarea
+                # Incluir el parametro Message si esta presente
+                $messageParam = if ([string]::IsNullOrWhiteSpace($Message)) { "" } else { " -Message '$($Message -replace "'", "''")'" }
                 $scriptBlock = [scriptblock]::Create(@"
 (new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/gbdeploy.psm1') | Invoke-Expression
-Start-GbDeploy -Name '$Name' -N $N -Every $Every
+Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
 "@)
                 
                 # Calcular hora de siguiente ejecucion
