@@ -1,5 +1,7 @@
-
-#(new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/gbdeploy.psm1') | Invoke-Expression
+<#
+(new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/gbdeploy.psm1') | Invoke-Expression
+Start-GbDeploy -Name "Test" -N 5 -Every 1
+#>
 
 function Show-UserMessage {
     <#
@@ -771,6 +773,7 @@ function Invoke-GbDeployment {
         
         # Descargar el modulo desde GitHub
         $url = "https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/$moduleName.psm1"
+        Write-Host "URL: $url" -ForegroundColor Yellow
         $moduleContent = (new-object Net.WebClient).DownloadString($url)
         
         # Ejecutar el modulo
