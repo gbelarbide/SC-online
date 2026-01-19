@@ -1017,7 +1017,7 @@ function Start-GbDeploy {
             }
             else {
                 # Mensaje personalizado + info de intentos
-                $userMessage = "$Message`n`n¿Desea instalar $Name ahora?`n`nSi selecciona 'Cancelar', se le volvera a preguntar en $Every minutos.`n`nIntentos restantes: $($N - $currentAttempt)"
+                $userMessage = "$Message`n`nDesea instalar $Name ahora?`n`nSi selecciona 'Cancelar', se le volvera a preguntar en $Every minutos.`n`nIntentos restantes: $($N - $currentAttempt)"
             }
             
             # Log: Mensaje mostrado al usuario
