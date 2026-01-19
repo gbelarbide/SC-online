@@ -202,8 +202,8 @@ function Show-UserPrompt {
             $escapedMessage = $Message -replace '&', '&amp;' -replace '<', '&lt;' -replace '>', '&gt;' -replace '"', '&quot;' -replace "'", '&#39;' -replace '\r?\n', '<br>'
             $escapedTitle = $Title -replace '&', '&amp;' -replace '<', '&lt;' -replace '>', '&gt;' -replace '"', '&quot;'
             
-            # Determinar botones
-            $buttons = if ($Buttons -eq "YesNo") {
+            # Determinar botones HTML
+            $buttonsHtml = if ($Buttons -eq "YesNo") {
                 @"
                 <button onclick="saveResult('Yes')" style="padding: 10px 30px; margin: 5px; font-size: 14px;">Sí</button>
                 <button onclick="saveResult('No')" style="padding: 10px 30px; margin: 5px; font-size: 14px;">No</button>
@@ -346,7 +346,7 @@ function Show-UserPrompt {
         <div class="message">$escapedMessage</div>
         <div id="countdown" class="countdown">Tiempo restante: $(if ($TimeoutSeconds -ge 3600) { [Math]::Floor($TimeoutSeconds / 3600).ToString() + ':' } else { '' })$([Math]::Floor(($TimeoutSeconds % 3600) / 60).ToString('00')):$($TimeoutSeconds % 60).ToString('00')</div>
         <div class="buttons">
-            $buttons
+            $buttonsHtml
         </div>
     </div>
 </body>
