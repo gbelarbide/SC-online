@@ -1116,6 +1116,9 @@ function Start-GbDeploy {
             # Log: Instalacion forzada iniciada
             Add-DeploymentLog -AppName $Name -EventType "InstallationStarted" -Details "Instalacion forzada - ultimo intento" -Attempt $N
             
+            # Mostrar mensaje de instalación en curso
+            Show-UserMessage -Message "INSTALANDO $Name...`n`nPor favor, NO REINICIE ni APAGUE el equipo durante la instalacion.`n`nEste proceso puede tardar varios minutos." -Title "Instalacion en Curso" -Timeout 0
+            
             # Ejecutar la instalacion
             Write-Host "Ejecutando instalacion de $Name..." -ForegroundColor Green
             $deployResult = Invoke-GbDeployment -Name $Name
@@ -1140,78 +1143,22 @@ function Start-GbDeploy {
         }
         else {
             # EJECUCIONES INTERMEDIAS: Preguntar al usuario
-            Write-Host "=== INTENTO $currentAttempt de $N ===" -ForegroundColor Cyan
             
-            # Construir mensaje para el usuario
-            if ([string]::IsNullOrWhiteSpace($Message)) {
-                # Mensaje por defecto
-                $userMessage = "Desea instalar $Name ahora?`n`nSi selecciona 'Cancelar', se le volvera a preguntar en $Every minutos.`n`nIntentos restantes: $($N - $currentAttempt)"
-            }
-            else {
-                # Mensaje personalizado + info de intentos
-                $userMessage = "$Message`n`nDesea instalar $Name ahora?`n`nSi selecciona 'Cancelar', se le volvera a preguntar en $Every minutos.`n`nIntentos restantes: $($N - $currentAttempt)"
-            }
+            # Detectar si es la primera ejecución (no existe tarea previa)
+            $isFirstRun = ($currentAttempt -eq 1 -and -not $existingTask)
             
-            # Log: Mensaje mostrado al usuario
-            Add-DeploymentLog -AppName $Name -EventType "MessageShown" -Details "Intento $currentAttempt de $N" -Attempt $currentAttempt
-            
-            # Preguntar al usuario (timeout de 30 minutos)
-            $response = Show-UserPrompt -Message $userMessage -Title "Instalacion de $Name" -Buttons "OKCancel" -Icon "Question" -TimeoutSeconds 1800
-            
-            # Log: Respuesta del usuario
-            Add-DeploymentLog -AppName $Name -EventType "UserResponse" -Details "Respuesta: $response" -Attempt $currentAttempt
-            
-            if ($response -eq "OK") {
-                # Usuario acepto: Ejecutar instalacion y eliminar tarea
-                Write-Host "Usuario acepto la instalacion." -ForegroundColor Green
+            if ($isFirstRun) {
+                # PRIMERA EJECUCIÓN: Solo programar la tarea para 1 minuto después
+                Write-Host "=== PRIMERA EJECUCION ===" -ForegroundColor Cyan
+                Write-Host "Programando primera verificacion en 1 minuto..." -ForegroundColor Yellow
                 
-                # Log: Instalacion iniciada
-                Add-DeploymentLog -AppName $Name -EventType "InstallationStarted" -Details "Usuario acepto en intento $currentAttempt" -Attempt $currentAttempt
+                # Log: Primera ejecución
+                Add-DeploymentLog -AppName $Name -EventType "MessageShown" -Details "Primera ejecucion - programando tarea" -Attempt 1
                 
-                # Ejecutar la instalacion
-                Write-Host "Ejecutando instalacion de $Name..." -ForegroundColor Green
-                $deployResult = Invoke-GbDeployment -Name $Name
+                # Incrementar contador de intentos para la siguiente ejecución
+                $nextAttempt = 2
                 
-                # Log: Instalacion completada
-                $status = if ($deployResult.Success) { "Exitosa" } else { "Fallida" }
-                Add-DeploymentLog -AppName $Name -EventType "InstallationCompleted" -Details "Estado: $status - $($deployResult.Message)" -Attempt $currentAttempt
-                
-                # Guardar resultado en el registro
-                Save-DeploymentResult -AppName $Name -Result $deployResult | Out-Null
-                
-                # Eliminar la tarea programada
-                Write-Verbose "Eliminando tarea programada..."
-                Remove-GbScheduledTask -TaskName $taskName -Force -ErrorAction SilentlyContinue
-                
-                if ($deployResult.Success) {
-                    Write-Host "Despliegue de $Name completado exitosamente." -ForegroundColor Green
-                    
-                    # Devolver JSON con resultado exitoso
-                    $jsonResult = @{
-                        result = "OK"
-                        log    = @("Despliegue completado: $($deployResult.Message)")
-                    }
-                    return ($jsonResult | ConvertTo-Json -Compress)
-                }
-                else {
-                    Write-Warning "El despliegue de $Name finalizo con errores: $($deployResult.Message)"
-                    
-                    # Devolver JSON con error
-                    $jsonResult = @{
-                        result = "ERROR"
-                        log    = @("Despliegue fallido: $($deployResult.Message)")
-                    }
-                    return ($jsonResult | ConvertTo-Json -Compress)
-                }
-            }
-            else {
-                # Usuario rechazo: Programar siguiente ejecucion
-                Write-Host "Usuario rechazo la instalacion. Programando siguiente intento..." -ForegroundColor Yellow
-                
-                # Incrementar contador de intentos
-                $nextAttempt = $currentAttempt + 1
-                
-                # Crear metadatos actualizados
+                # Crear metadatos
                 $metadata = @{
                     CurrentAttempt  = $nextAttempt
                     TotalAttempts   = $N
@@ -1220,29 +1167,22 @@ function Start-GbDeploy {
                     LastAttempt     = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
                 } | ConvertTo-Json -Compress
                 
-                # Eliminar tarea existente si existe
-                if ($existingTask) {
-                    Unregister-ScheduledTask -TaskName $taskName -TaskPath $taskPath -Confirm:$false -ErrorAction SilentlyContinue
-                }
-                
                 # Crear el script que se ejecutara en la tarea
-                # Incluir el parametro Message si esta presente
                 $messageParam = if ([string]::IsNullOrWhiteSpace($Message)) { "" } else { " -Message '$($Message -replace "'", "''")'" }
                 $scriptBlock = [scriptblock]::Create(@"
 (new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/gbdeploy.psm1') | Invoke-Expression
 Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
 "@)
                 
-                # Calcular hora de siguiente ejecucion
-                $nextRunTime = (Get-Date).AddMinutes($Every)
+                # Calcular hora de siguiente ejecucion (1 minuto)
+                $nextRunTime = (Get-Date).AddMinutes(1)
                 
                 # Crear nueva tarea programada
-                Write-Verbose "Creando tarea para siguiente ejecucion en $nextRunTime"
+                Write-Verbose "Creando tarea para primera ejecucion real en $nextRunTime"
                 
                 $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command `"$($scriptBlock.ToString())`""
                 
                 # Crear dos triggers: uno por tiempo y otro al logon
-                # Esto asegura que si el ordenador se apaga, la tarea se ejecute al iniciar sesion
                 $triggerTime = New-ScheduledTaskTrigger -Once -At $nextRunTime
                 $triggerLogon = New-ScheduledTaskTrigger -AtLogOn
                 
@@ -1252,14 +1192,141 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                 # Registrar con ambos triggers
                 Register-ScheduledTask -TaskName $taskName -TaskPath $taskPath -Action $action -Trigger @($triggerTime, $triggerLogon) -Principal $principal -Settings $settings -Description $metadata -Force | Out-Null
                 
-                Write-Host "Siguiente intento programado para: $nextRunTime (o al iniciar sesion)" -ForegroundColor Cyan
+                Write-Host "Tarea programada creada. Primera verificacion en: $nextRunTime" -ForegroundColor Green
                 
-                # Devolver JSON indicando que se programó siguiente intento
+                # Devolver JSON indicando que se programó la primera ejecución
                 $jsonResult = @{
                     result = "OK"
-                    log    = @("Usuario rechazo. Siguiente intento: $nextRunTime (Intento $nextAttempt de $N)")
+                    log    = @("Primera ejecucion programada para: $nextRunTime")
                 }
                 return ($jsonResult | ConvertTo-Json -Compress)
+            }
+            else {
+                # EJECUCIONES SUBSIGUIENTES: Preguntar al usuario
+                Write-Host "=== INTENTO $currentAttempt de $N ===" -ForegroundColor Cyan
+                
+                # Construir mensaje para el usuario
+                if ([string]::IsNullOrWhiteSpace($Message)) {
+                    # Mensaje por defecto
+                    $userMessage = "Desea instalar $Name ahora?`n`nSi selecciona 'Cancelar', se le volvera a preguntar en $Every minutos.`n`nIntentos restantes: $($N - $currentAttempt)"
+                }
+                else {
+                    # Mensaje personalizado + info de intentos
+                    $userMessage = "$Message`n`nDesea instalar $Name ahora?`n`nSi selecciona 'Cancelar', se le volvera a preguntar en $Every minutos.`n`nIntentos restantes: $($N - $currentAttempt)"
+                }
+                
+                # Log: Mensaje mostrado al usuario
+                Add-DeploymentLog -AppName $Name -EventType "MessageShown" -Details "Intento $currentAttempt de $N" -Attempt $currentAttempt
+                
+                # Preguntar al usuario (timeout de 15 minutos)
+                $response = Show-UserPrompt -Message $userMessage -Title "Instalacion de $Name" -Buttons "OKCancel" -Icon "Question" -TimeoutSeconds 900
+                
+                # Log: Respuesta del usuario
+                Add-DeploymentLog -AppName $Name -EventType "UserResponse" -Details "Respuesta: $response" -Attempt $currentAttempt
+                
+                if ($response -eq "OK") {
+                    # Usuario acepto: Ejecutar instalacion y eliminar tarea
+                    Write-Host "Usuario acepto la instalacion." -ForegroundColor Green
+                    
+                    # Log: Instalacion iniciada
+                    Add-DeploymentLog -AppName $Name -EventType "InstallationStarted" -Details "Usuario acepto en intento $currentAttempt" -Attempt $currentAttempt
+                    
+                    # Mostrar mensaje de instalación en curso
+                    Show-UserMessage -Message "INSTALANDO $Name...`n`nPor favor, NO REINICIE ni APAGUE el equipo durante la instalacion.`n`nEste proceso puede tardar varios minutos." -Title "Instalacion en Curso" -Timeout 0
+                    
+                    # Ejecutar la instalacion
+                    Write-Host "Ejecutando instalacion de $Name..." -ForegroundColor Green
+                    $deployResult = Invoke-GbDeployment -Name $Name
+                    
+                    # Log: Instalacion completada
+                    $status = if ($deployResult.Success) { "Exitosa" } else { "Fallida" }
+                    Add-DeploymentLog -AppName $Name -EventType "InstallationCompleted" -Details "Estado: $status - $($deployResult.Message)" -Attempt $currentAttempt
+                    
+                    # Guardar resultado en el registro
+                    Save-DeploymentResult -AppName $Name -Result $deployResult | Out-Null
+                    
+                    # Eliminar la tarea programada
+                    Write-Verbose "Eliminando tarea programada..."
+                    Remove-GbScheduledTask -TaskName $taskName -Force -ErrorAction SilentlyContinue
+                    
+                    if ($deployResult.Success) {
+                        Write-Host "Despliegue de $Name completado exitosamente." -ForegroundColor Green
+                        
+                        # Devolver JSON con resultado exitoso
+                        $jsonResult = @{
+                            result = "OK"
+                            log    = @("Despliegue completado: $($deployResult.Message)")
+                        }
+                        return ($jsonResult | ConvertTo-Json -Compress)
+                    }
+                    else {
+                        Write-Warning "El despliegue de $Name finalizo con errores: $($deployResult.Message)"
+                        
+                        # Devolver JSON con error
+                        $jsonResult = @{
+                            result = "ERROR"
+                            log    = @("Despliegue fallido: $($deployResult.Message)")
+                        }
+                        return ($jsonResult | ConvertTo-Json -Compress)
+                    }
+                }
+                else {
+                    # Usuario rechazo: Programar siguiente ejecucion
+                    Write-Host "Usuario rechazo la instalacion. Programando siguiente intento..." -ForegroundColor Yellow
+                
+                    # Incrementar contador de intentos
+                    $nextAttempt = $currentAttempt + 1
+                
+                    # Crear metadatos actualizados
+                    $metadata = @{
+                        CurrentAttempt  = $nextAttempt
+                        TotalAttempts   = $N
+                        IntervalMinutes = $Every
+                        AppName         = $Name
+                        LastAttempt     = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+                    } | ConvertTo-Json -Compress
+                
+                    # Eliminar tarea existente si existe
+                    if ($existingTask) {
+                        Unregister-ScheduledTask -TaskName $taskName -TaskPath $taskPath -Confirm:$false -ErrorAction SilentlyContinue
+                    }
+                
+                    # Crear el script que se ejecutara en la tarea
+                    # Incluir el parametro Message si esta presente
+                    $messageParam = if ([string]::IsNullOrWhiteSpace($Message)) { "" } else { " -Message '$($Message -replace "'", "''")'" }
+                    $scriptBlock = [scriptblock]::Create(@"
+(new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/gbdeploy.psm1') | Invoke-Expression
+Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
+"@)
+                
+                    # Calcular hora de siguiente ejecucion
+                    $nextRunTime = (Get-Date).AddMinutes($Every)
+                
+                    # Crear nueva tarea programada
+                    Write-Verbose "Creando tarea para siguiente ejecucion en $nextRunTime"
+                
+                    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command `"$($scriptBlock.ToString())`""
+                
+                    # Crear dos triggers: uno por tiempo y otro al logon
+                    # Esto asegura que si el ordenador se apaga, la tarea se ejecute al iniciar sesion
+                    $triggerTime = New-ScheduledTaskTrigger -Once -At $nextRunTime
+                    $triggerLogon = New-ScheduledTaskTrigger -AtLogOn
+                
+                    $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+                    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+                
+                    # Registrar con ambos triggers
+                    Register-ScheduledTask -TaskName $taskName -TaskPath $taskPath -Action $action -Trigger @($triggerTime, $triggerLogon) -Principal $principal -Settings $settings -Description $metadata -Force | Out-Null
+                
+                    Write-Host "Siguiente intento programado para: $nextRunTime (o al iniciar sesion)" -ForegroundColor Cyan
+                
+                    # Devolver JSON indicando que se programó siguiente intento
+                    $jsonResult = @{
+                        result = "OK"
+                        log    = @("Usuario rechazo. Siguiente intento: $nextRunTime (Intento $nextAttempt de $N)")
+                    }
+                    return ($jsonResult | ConvertTo-Json -Compress)
+                }
             }
         }
     }
