@@ -117,7 +117,7 @@ Function Test-Installed {
         que el sistema cumple con los prerequisitos necesarios para la instalacion
     
     .OUTPUTS
-        PSCustomObject con información detallada del estado de Office y prerequisitos
+        PSCustomObject con informacion detallada del estado de Office y prerequisitos
     
     .EXAMPLE
         $status = Test-Installed
@@ -132,7 +132,7 @@ Function Test-Installed {
     
     Write-Verbose "Verificando estado de Office y prerequisitos del sistema..."
     
-    # Obtener información de Office instalado
+    # Obtener informacion de Office instalado
     $officeInfo = Test-OfficeInstalled
     
     # Verificar permisos de administrador
@@ -171,7 +171,7 @@ Function Test-Installed {
     Write-Verbose "  - Necesita migracion: $($result.NeedsMigration)"
     Write-Verbose "Prerequisitos:"
     Write-Verbose "  - Permisos de administrador: $hasAdminRights"
-    Write-Verbose "  - Espacio en disco: $freeSpaceGB GB (mínimo: $minDiskSpaceGB GB)"
+    Write-Verbose "  - Espacio en disco: $freeSpaceGB GB (minimo: $minDiskSpaceGB GB)"
     Write-Verbose "  - Puede proceder: $($result.CanProceed)"
     
     return $result
@@ -183,17 +183,17 @@ Function Start-Preinstall {
         Prepara los archivos necesarios para la instalacion de Office 64-bit
     
     .DESCRIPTION
-        Descarga Office Deployment Tool, lo extrae, crea el archivo de configuración XML
+        Descarga Office Deployment Tool, lo extrae, crea el archivo de configuracion XML
         y descarga los archivos de instalacion de Office 64-bit
     
     .PARAMETER InstallPath
-        Ruta donde se descargarán los archivos (por defecto: C:\Temp\Office)
+        Ruta donde se descargaran los archivos (por defecto: C:\Temp\Office)
     
     .PARAMETER NeedsMigration
         Indica si se necesita migracion de 32-bit a 64-bit
     
     .OUTPUTS
-        PSCustomObject con información sobre los archivos descargados
+        PSCustomObject con informacion sobre los archivos descargados
     
     .EXAMPLE
         $preinstall = Start-Preinstall
@@ -222,7 +222,7 @@ Function Start-Preinstall {
     }
     
     try {
-        Write-Host "=== PREPARACIÓN DE INSTALACION ===" -ForegroundColor Cyan
+        Write-Host "=== PREPARACIoN DE INSTALACION ===" -ForegroundColor Cyan
         
         # Crear directorio si no existe
         if (-not (Test-Path -Path $InstallPath)) {
@@ -230,8 +230,8 @@ Function Start-Preinstall {
             Write-Host "Directorio creado: $InstallPath" -ForegroundColor Green
         }
         
-        # Crear archivo de configuración XML
-        Write-Host "Creando archivo de configuración..." -ForegroundColor Yellow
+        # Crear archivo de configuracion XML
+        Write-Host "Creando archivo de configuracion..." -ForegroundColor Yellow
         $configXML = @"
 <Configuration>
   <Add OfficeClientEdition="64" Channel="MonthlyEnterprise" MigrateArch="TRUE" ForceAppShutdown="TRUE">
@@ -252,7 +252,7 @@ Function Start-Preinstall {
         
         $configPath = Join-Path -Path $InstallPath -ChildPath 'configuration.xml'
         $configXML | Out-File -FilePath $configPath -Encoding UTF8 -Force
-        Write-Host "Archivo de configuración creado: $configPath" -ForegroundColor Green
+        Write-Host "Archivo de configuracion creado: $configPath" -ForegroundColor Green
         $result.ConfigXmlPath = $configPath
         
         # Descargar Office Deployment Tool
@@ -266,25 +266,25 @@ Function Start-Preinstall {
         # Extraer ODT
         Write-Host "Extrayendo Office Deployment Tool..." -ForegroundColor Yellow
         Start-Process -FilePath $odtPath -ArgumentList "/quiet /extract:$InstallPath" -Wait -NoNewWindow
-        Write-Host "Office Deployment Tool extraído" -ForegroundColor Green
+        Write-Host "Office Deployment Tool extraido" -ForegroundColor Green
         
         # Verificar que setup.exe existe
         $setupPath = Join-Path -Path $InstallPath -ChildPath "setup.exe"
         if (-not (Test-Path -Path $setupPath)) {
-            throw "No se encontró setup.exe después de extraer ODT"
+            throw "No se encontro setup.exe despues de extraer ODT"
         }
         $result.SetupExePath = $setupPath
         
         # Descargar archivos de Office
         Write-Host "Descargando archivos de Office 64-bit..." -ForegroundColor Yellow
-        Write-Host "Esto puede tardar varios minutos dependiendo de la conexión..." -ForegroundColor Cyan
+        Write-Host "Esto puede tardar varios minutos dependiendo de la conexion..." -ForegroundColor Cyan
         Start-Process -FilePath $setupPath -ArgumentList "/download `"$configPath`"" -Wait -NoNewWindow
         Write-Host "Archivos de Office descargados correctamente" -ForegroundColor Green
         
         $result.FilesDownloaded = $true
         $result.Success = $true
         
-        Write-Host "`n✓ Preparacion completada exitosamente" -ForegroundColor Green
+        Write-Host "`n? Preparacion completada exitosamente" -ForegroundColor Green
         
     }
     catch {
@@ -301,7 +301,7 @@ Function Start-PostInstall {
         Verifica la instalacion y limpia archivos temporales
     
     .DESCRIPTION
-        Verifica que Office 64-bit se instaló correctamente y opcionalmente
+        Verifica que Office 64-bit se instalo correctamente y opcionalmente
         limpia los archivos temporales de instalacion
     
     .PARAMETER InstallPath
@@ -340,10 +340,10 @@ Function Start-PostInstall {
     }
     
     try {
-        Write-Host "`n=== VERIFICACIÓN POST-INSTALACION ===" -ForegroundColor Cyan
+        Write-Host "`n=== VERIFICACIoN POST-INSTALACION ===" -ForegroundColor Cyan
         
         # Esperar un momento para que el sistema se actualice
-        Write-Host "Esperando actualización del sistema..." -ForegroundColor Yellow
+        Write-Host "Esperando actualizacion del sistema..." -ForegroundColor Yellow
         Start-Sleep -Seconds 5
         
         # Verificar la instalacion
@@ -407,14 +407,14 @@ Function Start-Install {
         Ejecuta la instalacion/migracion de Office 64-bit
     
     .DESCRIPTION
-        Ejecuta setup.exe con el archivo de configuración XML para instalar o migrar Office 64-bit.
-        Esta función asume que los archivos ya han sido descargados por Start-Preinstall.
+        Ejecuta setup.exe con el archivo de configuracion XML para instalar o migrar Office 64-bit.
+        Esta funcion asume que los archivos ya han sido descargados por Start-Preinstall.
     
     .PARAMETER SetupExePath
         Ruta completa al archivo setup.exe del Office Deployment Tool
     
     .PARAMETER ConfigXmlPath
-        Ruta completa al archivo de configuración XML
+        Ruta completa al archivo de configuracion XML
     
     .PARAMETER NeedsMigration
         Indica si es una migracion de 32-bit a 64-bit
@@ -455,24 +455,24 @@ Function Start-Install {
         
         # Verificar que los archivos existen
         if (-not (Test-Path -Path $SetupExePath)) {
-            throw "No se encontró setup.exe en: $SetupExePath"
+            throw "No se encontro setup.exe en: $SetupExePath"
         }
         
         if (-not (Test-Path -Path $ConfigXmlPath)) {
-            throw "No se encontró el archivo de configuración en: $ConfigXmlPath"
+            throw "No se encontro el archivo de configuracion en: $ConfigXmlPath"
         }
         
-        # Mensaje según tipo de instalacion
+        # Mensaje segun tipo de instalacion
         if ($NeedsMigration) {
             Write-Host "Migrando de Office 32-bit a 64-bit..." -ForegroundColor Yellow
-            Write-Host "El parametro MigrateArch preservará su configuración y datos." -ForegroundColor Cyan
+            Write-Host "El parametro MigrateArch preservara su configuracion y datos." -ForegroundColor Cyan
         }
         else {
             Write-Host "Instalando Office 64-bit..." -ForegroundColor Yellow
         }
         
         Write-Host "Canal: MonthlyEnterprise (Empresas)" -ForegroundColor Cyan
-        Write-Host "Idioma: Español (es-es)" -ForegroundColor Cyan
+        Write-Host "Idioma: Espanol (es-es)" -ForegroundColor Cyan
         Write-Host "`nEsto puede tardar varios minutos..." -ForegroundColor Yellow
         
         # Ejecutar la instalacion
@@ -493,10 +493,10 @@ Function Start-Install {
                 Write-Host "`n[OK] Instalacion completada exitosamente" -ForegroundColor Green
             }
             
-            Write-Host "Duración: $($result.Duration.ToString('mm\:ss'))" -ForegroundColor Cyan
+            Write-Host "Duracion: $($result.Duration.ToString('mm\:ss'))" -ForegroundColor Cyan
         }
         else {
-            $result.ErrorMessage = "Setup.exe finalizó con código de salida: $($process.ExitCode)"
+            $result.ErrorMessage = "Setup.exe finalizo con codigo de salida: $($process.ExitCode)"
             Write-Warning $result.ErrorMessage
         }
     }
@@ -514,27 +514,27 @@ Function Start-Deploy {
         Orquesta el despliegue completo de Office 64-bit
     
     .DESCRIPTION
-        Función principal que coordina todo el flujo de instalacion de Office 64-bit:
+        Funcion principal que coordina todo el flujo de instalacion de Office 64-bit:
         1. Verifica el estado actual y prerequisitos (Test-Installed)
         2. Descarga los archivos necesarios (Start-Preinstall)
         3. Ejecuta la instalacion/migracion (Start-Install)
         4. Verifica y limpia (Start-PostInstall)
     
     .PARAMETER InstallPath
-        Ruta donde se descargarán los archivos temporales (por defecto: C:\Temp\Office)
+        Ruta donde se descargaran los archivos temporales (por defecto: C:\Temp\Office)
     
     .PARAMETER Force
         Fuerza la instalacion incluso si Office 64-bit ya esta instalado
     
     .PARAMETER KeepFiles
-        No elimina los archivos temporales después de la instalacion
+        No elimina los archivos temporales despues de la instalacion
     
     .OUTPUTS
         PSCustomObject con el resultado completo del despliegue
     
     .EXAMPLE
         Start-Deploy
-        Despliega Office 64-bit con configuración por defecto
+        Despliega Office 64-bit con configuracion por defecto
     
     .EXAMPLE
         Start-Deploy -Force -KeepTempFiles
@@ -583,7 +583,7 @@ Function Start-Deploy {
         $testResult = Test-Installed
         $deployResult.TestResult = $testResult
         
-        # Mostrar información del sistema
+        # Mostrar informacion del sistema
         Write-Host "`nEstado del sistema:" -ForegroundColor Yellow
         Write-Host "  Office instalado: $($testResult.IsInstalled)" -ForegroundColor Cyan
         if ($testResult.IsInstalled) {
@@ -614,7 +614,7 @@ Function Start-Deploy {
         
         # FASE 2: Preparacion
         $deployResult.Phase = "Preparacion"
-        Write-Host "`n=== FASE 2: PREPARACIÓN ===" -ForegroundColor Cyan
+        Write-Host "`n=== FASE 2: PREPARACIoN ===" -ForegroundColor Cyan
         $preinstallResult = Start-Preinstall -InstallPath $InstallPath -NeedsMigration $testResult.NeedsMigration
         $deployResult.PreinstallResult = $preinstallResult
         
@@ -636,7 +636,7 @@ Function Start-Deploy {
         
         # FASE 4: Verificacion Post-Instalacion
         $deployResult.Phase = "Verificacion Post-Instalacion"
-        Write-Host "`n=== FASE 4: VERIFICACIÓN POST-INSTALACION ===" -ForegroundColor Cyan
+        Write-Host "`n=== FASE 4: VERIFICACIoN POST-INSTALACION ===" -ForegroundColor Cyan
         $postInstallResult = Start-PostInstall -InstallPath $InstallPath -KeepFiles:$KeepTempFiles
         $deployResult.PostInstallResult = $postInstallResult
         
@@ -650,9 +650,9 @@ Function Start-Deploy {
             Write-Host "Resumen:" -ForegroundColor Cyan
             Write-Host "  Version instalada: $($postInstallResult.InstalledVersion)" -ForegroundColor Green
             Write-Host "  Arquitectura: $($postInstallResult.InstalledArchitecture)" -ForegroundColor Green
-            Write-Host "  Duración de instalacion: $($installResult.Duration.ToString('mm\:ss'))" -ForegroundColor Cyan
+            Write-Host "  Duracion de instalacion: $($installResult.Duration.ToString('mm\:ss'))" -ForegroundColor Cyan
             Write-Host "  Canal: MonthlyEnterprise (Empresas)" -ForegroundColor Cyan
-            Write-Host "  Idioma: Español (es-es)" -ForegroundColor Cyan
+            Write-Host "  Idioma: Espanol (es-es)" -ForegroundColor Cyan
             
             if ($testResult.NeedsMigration) {
                 Write-Host "  Tipo: Migracion de 32-bit a 64-bit" -ForegroundColor Cyan
