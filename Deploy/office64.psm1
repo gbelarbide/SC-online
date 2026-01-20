@@ -571,10 +571,10 @@ Function Start-Deploy {
     }
     
     try {
-        Write-Host "╔════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-        Write-Host "║  DESPLIEGUE DE MICROSOFT OFFICE 64-BIT                     ║" -ForegroundColor Cyan
-        Write-Host "║  Canal: MonthlyEnterprise | Idioma: Español (es-es)       ║" -ForegroundColor Cyan
-        Write-Host "╚════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+        Write-Host "================================================================" -ForegroundColor Cyan
+        Write-Host "  DESPLIEGUE DE MICROSOFT OFFICE 64-BIT                       " -ForegroundColor Cyan
+        Write-Host "  Canal: MonthlyEnterprise | Idioma: Espanol (es-es)         " -ForegroundColor Cyan
+        Write-Host "================================================================" -ForegroundColor Cyan
         Write-Host ""
         
         # FASE 1: Verificación
@@ -643,9 +643,9 @@ Function Start-Deploy {
         if ($postInstallResult.VerificationSuccess) {
             $deployResult.Success = $true
             
-            Write-Host "`n╔════════════════════════════════════════════════════════════╗" -ForegroundColor Green
-            Write-Host "║  ✓ DESPLIEGUE COMPLETADO EXITOSAMENTE                      ║" -ForegroundColor Green
-            Write-Host "╚════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+            Write-Host "`n================================================================" -ForegroundColor Green
+            Write-Host "  [OK] DESPLIEGUE COMPLETADO EXITOSAMENTE                    " -ForegroundColor Green
+            Write-Host "================================================================" -ForegroundColor Green
             Write-Host ""
             Write-Host "Resumen:" -ForegroundColor Cyan
             Write-Host "  Versión instalada: $($postInstallResult.InstalledVersion)" -ForegroundColor Green
@@ -669,9 +669,9 @@ Function Start-Deploy {
     catch {
         $deployResult.ErrorMessage = $_.Exception.Message
         
-        Write-Host "`n╔════════════════════════════════════════════════════════════╗" -ForegroundColor Red
-        Write-Host "║  ✗ ERROR EN EL DESPLIEGUE                                  ║" -ForegroundColor Red
-        Write-Host "╚════════════════════════════════════════════════════════════╝" -ForegroundColor Red
+        Write-Host "`n================================================================" -ForegroundColor Red
+        Write-Host "  [ERROR] ERROR EN EL DESPLIEGUE                              " -ForegroundColor Red
+        Write-Host "================================================================" -ForegroundColor Red
         Write-Host ""
         Write-Host "Fase: $($deployResult.Phase)" -ForegroundColor Yellow
         Write-Host "Error: $($deployResult.ErrorMessage)" -ForegroundColor Red
