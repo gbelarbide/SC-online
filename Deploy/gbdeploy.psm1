@@ -101,6 +101,284 @@ function Show-UserMessage {
     }
 }
 
+function Show-InstallationProgress {
+    <#
+    .SYNOPSIS
+        Muestra un mensaje animado de instalación en curso con puntos animados.
+    
+    .DESCRIPTION
+        Esta función crea una ventana HTA que muestra un mensaje de instalación con animación
+        de puntos (...) y permanece siempre en primer plano. La ventana se puede cerrar
+        programáticamente escribiendo en un archivo de control.
+    
+    .PARAMETER AppName
+        Nombre de la aplicación que se está instalando.
+    
+    .PARAMETER ControlFile
+        Ruta al archivo de control que se usará para cerrar la ventana.
+        Cuando este archivo contenga "CLOSE", la ventana se cerrará.
+    
+    .EXAMPLE
+        $controlFile = "$env:TEMP\install_control.txt"
+        Show-InstallationProgress -AppName "Office 64-bit" -ControlFile $controlFile
+        # ... realizar instalación ...
+        Set-Content -Path $controlFile -Value "CLOSE"
+    
+    .OUTPUTS
+        Devuelve el proceso de mshta.exe para poder cerrarlo si es necesario.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$AppName,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$ControlFile
+    )
+    
+    try {
+        # Crear archivo de control vacío
+        "" | Out-File -FilePath $ControlFile -Force
+        
+        # Escapar caracteres especiales para HTML
+        $escapedAppName = $AppName -replace '<', '&lt;' -replace '>', '&gt;' -replace '"', '&quot;'
+        
+        # Crear contenido HTA con animación
+        $htaPath = "$env:TEMP\InstallProgress_$(Get-Random).hta"
+        $htaContent = @"
+<html>
+<head>
+    <title>Instalación en Curso</title>
+    <HTA:APPLICATION
+        APPLICATIONNAME="InstallationProgress"
+        BORDER="dialog"
+        BORDERSTYLE="normal"
+        CAPTION="yes"
+        MAXIMIZEBUTTON="no"
+        MINIMIZEBUTTON="no"
+        SCROLL="no"
+        SHOWINTASKBAR="yes"
+        SINGLEINSTANCE="yes"
+        SYSMENU="no"
+        WINDOWSTATE="normal"
+    />
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .container {
+            background-color: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            text-align: center;
+            min-width: 450px;
+        }
+        .icon {
+            font-size: 60px;
+            margin-bottom: 20px;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        h1 {
+            color: #333;
+            font-size: 24px;
+            margin: 0 0 10px 0;
+            font-weight: 600;
+        }
+        .app-name {
+            color: #667eea;
+            font-weight: 700;
+            font-size: 28px;
+            margin: 10px 0;
+        }
+        .message {
+            color: #666;
+            font-size: 16px;
+            line-height: 1.6;
+            margin: 20px 0;
+        }
+        .warning {
+            background-color: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+            color: #856404;
+            font-weight: 600;
+            font-size: 15px;
+        }
+        .dots {
+            display: inline-block;
+            width: 60px;
+            text-align: left;
+            font-size: 32px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+    <script>
+        var dotCount = 0;
+        var controlFile = "$($ControlFile -replace '\\', '\\')";
+        
+        function updateDots() {
+            dotCount = (dotCount + 1) % 4;
+            var dots = '';
+            for (var i = 0; i < dotCount; i++) {
+                dots += '.';
+            }
+            document.getElementById('dots').innerHTML = dots;
+        }
+        
+        function checkControlFile() {
+            try {
+                var fso = new ActiveXObject("Scripting.FileSystemObject");
+                if (fso.FileExists(controlFile)) {
+                    var file = fso.OpenTextFile(controlFile, 1);
+                    var content = file.ReadAll();
+                    file.Close();
+                    
+                    if (content.indexOf("CLOSE") !== -1) {
+                        // Mostrar mensaje de finalización brevemente
+                        document.getElementById('status').innerHTML = 'INSTALACIÓN COMPLETADA';
+                        document.getElementById('dots').innerHTML = '';
+                        setTimeout(function() {
+                            window.close();
+                        }, 2000);
+                        return;
+                    }
+                }
+            } catch(e) {
+                // Ignorar errores de lectura
+            }
+            
+            // Continuar verificando
+            setTimeout(checkControlFile, 500);
+        }
+        
+        window.onload = function() {
+            // Centrar ventana
+            window.resizeTo(550, 400);
+            window.moveTo((screen.width - 550) / 2, (screen.height - 400) / 2);
+            
+            // Mantener ventana en primer plano
+            setInterval(function() {
+                try {
+                    window.focus();
+                } catch(e) {}
+            }, 1000);
+            
+            // Iniciar animación de puntos
+            setInterval(updateDots, 500);
+            
+            // Iniciar verificación del archivo de control
+            checkControlFile();
+        };
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">⚙️</div>
+        <h1 id="status">INSTALANDO</h1>
+        <div class="app-name">$escapedAppName<span class="dots" id="dots"></span></div>
+        <div class="spinner"></div>
+        <div class="message">
+            Este proceso puede tardar varios minutos.
+        </div>
+        <div class="warning">
+            ⚠️ NO REINICIE ni APAGUE el equipo durante la instalación
+        </div>
+    </div>
+</body>
+</html>
+"@
+        
+        # Guardar HTA
+        $htaContent | Out-File -FilePath $htaPath -Encoding UTF8 -Force
+        
+        # Ejecutar HTA en segundo plano
+        $process = Start-Process -FilePath "mshta.exe" -ArgumentList "`"$htaPath`"" -PassThru -WindowStyle Normal
+        
+        Write-Verbose "Ventana de progreso iniciada con PID: $($process.Id)"
+        
+        return @{
+            Process     = $process
+            HtaPath     = $htaPath
+            ControlFile = $ControlFile
+        }
+    }
+    catch {
+        Write-Error "Error al mostrar progreso de instalación: $_"
+        return $null
+    }
+}
+
+function Close-InstallationProgress {
+    <#
+    .SYNOPSIS
+        Cierra la ventana de progreso de instalación.
+    
+    .PARAMETER ProgressInfo
+        Objeto devuelto por Show-InstallationProgress.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        $ProgressInfo
+    )
+    
+    try {
+        if ($ProgressInfo) {
+            # Escribir comando de cierre en el archivo de control
+            "CLOSE" | Out-File -FilePath $ProgressInfo.ControlFile -Force
+            
+            # Esperar un momento para que la ventana se cierre
+            Start-Sleep -Seconds 3
+            
+            # Si el proceso aún existe, forzar cierre
+            if ($ProgressInfo.Process -and -not $ProgressInfo.Process.HasExited) {
+                $ProgressInfo.Process | Stop-Process -Force -ErrorAction SilentlyContinue
+            }
+            
+            # Limpiar archivos temporales
+            if (Test-Path $ProgressInfo.HtaPath) {
+                Remove-Item $ProgressInfo.HtaPath -Force -ErrorAction SilentlyContinue
+            }
+            if (Test-Path $ProgressInfo.ControlFile) {
+                Remove-Item $ProgressInfo.ControlFile -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+    catch {
+        Write-Warning "Error al cerrar ventana de progreso: $_"
+    }
+}
+
+
 function Show-UserPrompt {
     <#
     .SYNOPSIS
@@ -337,6 +615,13 @@ function Show-UserPrompt {
             // Centrar ventana con mayor altura
             window.resizeTo(550, 500);
             window.moveTo((screen.width - 550) / 2, (screen.height - 500) / 2);
+            
+            // Mantener ventana en primer plano
+            setInterval(function() {
+                try {
+                    window.focus();
+                } catch(e) {}
+            }, 1000);
             
             // Iniciar cuenta atrás
             updateCountdown();
@@ -1116,12 +1401,16 @@ function Start-GbDeploy {
             # Log: Instalacion forzada iniciada
             Add-DeploymentLog -AppName $Name -EventType "InstallationStarted" -Details "Instalacion forzada - ultimo intento" -Attempt $N
             
-            # Mostrar mensaje de instalación en curso
-            Show-UserMessage -Message "INSTALANDO $Name...`n`nPor favor, NO REINICIE ni APAGUE el equipo durante la instalacion.`n`nEste proceso puede tardar varios minutos." -Title "Instalacion en Curso" -Timeout 0
+            # Mostrar ventana de progreso animada
+            $controlFile = "$env:TEMP\InstallControl_$(Get-Random).txt"
+            $progressWindow = Show-InstallationProgress -AppName $Name -ControlFile $controlFile
             
             # Ejecutar la instalacion
             Write-Host "Ejecutando instalacion de $Name..." -ForegroundColor Green
             $deployResult = Invoke-GbDeployment -Name $Name
+            
+            # Cerrar ventana de progreso
+            Close-InstallationProgress -ProgressInfo $progressWindow
             
             # Log: Instalacion completada
             $status = if ($deployResult.Success) { "Exitosa" } else { "Fallida" }
@@ -1231,12 +1520,16 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                     # Log: Instalacion iniciada
                     Add-DeploymentLog -AppName $Name -EventType "InstallationStarted" -Details "Usuario acepto en intento $currentAttempt" -Attempt $currentAttempt
                     
-                    # Mostrar mensaje de instalación en curso
-                    Show-UserMessage -Message "INSTALANDO $Name...`n`nPor favor, NO REINICIE ni APAGUE el equipo durante la instalacion.`n`nEste proceso puede tardar varios minutos." -Title "Instalacion en Curso" -Timeout 0
+                    # Mostrar ventana de progreso animada
+                    $controlFile = "$env:TEMP\InstallControl_$(Get-Random).txt"
+                    $progressWindow = Show-InstallationProgress -AppName $Name -ControlFile $controlFile
                     
                     # Ejecutar la instalacion
                     Write-Host "Ejecutando instalacion de $Name..." -ForegroundColor Green
                     $deployResult = Invoke-GbDeployment -Name $Name
+                    
+                    # Cerrar ventana de progreso
+                    Close-InstallationProgress -ProgressInfo $progressWindow
                     
                     # Log: Instalacion completada
                     $status = if ($deployResult.Success) { "Exitosa" } else { "Fallida" }
