@@ -1,7 +1,7 @@
 <#
 (new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/gbdeploy.psm1') | Invoke-Expression; Start-GbDeploy -Name "Test"
 (new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/gbdeploy.psm1') | Invoke-Expression; Start-GbDeploy -Name "office64"
-
+(new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/gbdeploy.psm1') | Invoke-Expression; Get-DeploymentLog -AppName "office64"
 #>
 
 function Show-UserMessage {
@@ -893,8 +893,12 @@ function Get-DeploymentLog {
         $logsPath = "HKLM:\SOFTWARE\ondoan\Deployments\$AppName\Logs"
         
         if (-not (Test-Path $logsPath)) {
-            Write-Warning "No se encontraron logs para la aplicacion: $AppName"
-            return @()
+            # No hay logs, devolver JSON con resultado OK y log vacío
+            $result = @{
+                result = "OK"
+                log    = ""
+            }
+            return ($result | ConvertTo-Json -Compress)
         }
         
         # Obtener todas las entradas de log
@@ -927,14 +931,35 @@ function Get-DeploymentLog {
             $logEntries = $logEntries | Select-Object -First $Last
         }
         
-        # Remover la propiedad EntryName antes de devolver
-        $logEntries | Select-Object -Property Timestamp, EventType, Details, Attempt
+        # Obtener el último log (más reciente)
+        $lastLog = $logEntries | Select-Object -First 1
         
-        return $logEntries
+        if ($lastLog) {
+            # Formatear el log como: "Timestamp EventType Details Attempt"
+            $logString = "$($lastLog.Timestamp) $($lastLog.EventType) $($lastLog.Details) $($lastLog.Attempt)"
+            
+            $result = @{
+                result = "OK"
+                log    = $logString
+            }
+        }
+        else {
+            # No hay logs después de aplicar filtros
+            $result = @{
+                result = "OK"
+                log    = ""
+            }
+        }
+        
+        return ($result | ConvertTo-Json -Compress)
     }
     catch {
-        Write-Warning "Error al recuperar logs: $_"
-        return @()
+        # En caso de error, devolver JSON con resultado ERROR
+        $result = @{
+            result = "ERROR"
+            log    = "Error al recuperar logs: $_"
+        }
+        return ($result | ConvertTo-Json -Compress)
     }
 }
 
