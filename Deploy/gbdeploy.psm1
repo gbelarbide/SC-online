@@ -935,19 +935,24 @@ function Get-DeploymentLog {
         $lastLog = $logEntries | Select-Object -First 1
         
         if ($lastLog) {
-            # Formatear el log como: "Timestamp EventType Details Attempt"
-            $logString = "$($lastLog.Timestamp) $($lastLog.EventType) $($lastLog.Details) $($lastLog.Attempt)"
+            # Formatear el log como array de líneas
+            $logLines = @(
+                $lastLog.Timestamp,
+                $lastLog.EventType,
+                $lastLog.Details,
+                $lastLog.Attempt.ToString()
+            )
             
             $result = @{
                 result = "OK"
-                log    = $logString
+                log    = $logLines
             }
         }
         else {
             # No hay logs después de aplicar filtros
             $result = @{
                 result = "OK"
-                log    = ""
+                log    = @()
             }
         }
         
@@ -957,7 +962,7 @@ function Get-DeploymentLog {
         # En caso de error, devolver JSON con resultado ERROR
         $result = @{
             result = "ERROR"
-            log    = "Error al recuperar logs: $_"
+            log    = @("Error al recuperar logs: $_")
         }
         return ($result | ConvertTo-Json -Compress)
     }
@@ -1184,7 +1189,7 @@ function Start-GbDeploy {
                     # Devolver JSON con resultado exitoso
                     $jsonResult = @{
                         result = "OK"
-                        log    = "Despliegue completado: $($deployResult.Message)"
+                        log    = @("Despliegue completado: $($deployResult.Message)")
                     }
                     return ($jsonResult | ConvertTo-Json -Compress)
                 }
@@ -1194,7 +1199,7 @@ function Start-GbDeploy {
                     # Devolver JSON con error
                     $jsonResult = @{
                         result = "ERROR"
-                        log    = "Despliegue fallido: $($deployResult.Message)"
+                        log    = @("Despliegue fallido: $($deployResult.Message)")
                     }
                     return ($jsonResult | ConvertTo-Json -Compress)
                 }
@@ -1252,7 +1257,7 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                 # Devolver JSON indicando que se programó siguiente intento
                 $jsonResult = @{
                     result = "OK"
-                    log    = "Usuario rechazo. Siguiente intento: $nextRunTime (Intento $nextAttempt de $N)"
+                    log    = @("Usuario rechazo. Siguiente intento: $nextRunTime (Intento $nextAttempt de $N)")
                 }
                 return ($jsonResult | ConvertTo-Json -Compress)
             }
@@ -1265,7 +1270,7 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
         # Devolver JSON con error
         $jsonResult = @{
             result = "ERROR"
-            log    = "Error en Start-GbDeploy: $_"
+            log    = @("Error en Start-GbDeploy: $_")
         }
         return ($jsonResult | ConvertTo-Json -Compress)
     }
