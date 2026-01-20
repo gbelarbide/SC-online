@@ -1180,9 +1180,23 @@ function Start-GbDeploy {
                 
                 if ($deployResult.Success) {
                     Write-Host "Despliegue de $Name completado exitosamente." -ForegroundColor Green
+                    
+                    # Devolver JSON con resultado exitoso
+                    $jsonResult = @{
+                        result = "OK"
+                        log    = "Despliegue completado: $($deployResult.Message)"
+                    }
+                    return ($jsonResult | ConvertTo-Json -Compress)
                 }
                 else {
                     Write-Warning "El despliegue de $Name finalizo con errores: $($deployResult.Message)"
+                    
+                    # Devolver JSON con error
+                    $jsonResult = @{
+                        result = "ERROR"
+                        log    = "Despliegue fallido: $($deployResult.Message)"
+                    }
+                    return ($jsonResult | ConvertTo-Json -Compress)
                 }
             }
             else {
@@ -1234,12 +1248,26 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                 Register-ScheduledTask -TaskName $taskName -TaskPath $taskPath -Action $action -Trigger @($triggerTime, $triggerLogon) -Principal $principal -Settings $settings -Description $metadata -Force | Out-Null
                 
                 Write-Host "Siguiente intento programado para: $nextRunTime (o al iniciar sesion)" -ForegroundColor Cyan
+                
+                # Devolver JSON indicando que se programó siguiente intento
+                $jsonResult = @{
+                    result = "OK"
+                    log    = "Usuario rechazo. Siguiente intento: $nextRunTime (Intento $nextAttempt de $N)"
+                }
+                return ($jsonResult | ConvertTo-Json -Compress)
             }
         }
     }
     catch {
         Write-Error "Error en Start-GbDeploy: $_"
         Write-Error $_.ScriptStackTrace
+        
+        # Devolver JSON con error
+        $jsonResult = @{
+            result = "ERROR"
+            log    = "Error en Start-GbDeploy: $_"
+        }
+        return ($jsonResult | ConvertTo-Json -Compress)
     }
 }
 
