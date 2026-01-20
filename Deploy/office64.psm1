@@ -184,13 +184,17 @@ Function Start-Preinstall {
     
     .DESCRIPTION
         Descarga Office Deployment Tool, lo extrae, crea el archivo de configuracion XML
-        y descarga los archivos de instalacion de Office 64-bit
+        y descarga los archivos de instalacion de Office 64-bit.
+        Si ya se ejecuto anteriormente, no vuelve a ejecutarse a menos que se use -Force.
     
     .PARAMETER InstallPath
         Ruta donde se descargaran los archivos (por defecto: C:\Temp\Office)
     
     .PARAMETER NeedsMigration
         Indica si se necesita migracion de 32-bit a 64-bit
+    
+    .PARAMETER Force
+        Fuerza la ejecucion incluso si ya se ejecuto anteriormente
     
     .OUTPUTS
         PSCustomObject con informacion sobre los archivos descargados
@@ -200,6 +204,10 @@ Function Start-Preinstall {
         if ($preinstall.Success) {
             Write-Host "Archivos listos en: $($preinstall.InstallPath)"
         }
+    
+    .EXAMPLE
+        $preinstall = Start-Preinstall -Force
+        Fuerza la descarga de archivos aunque ya se haya ejecutado antes
     #>
     
     [CmdletBinding()]
@@ -209,7 +217,10 @@ Function Start-Preinstall {
         [string]$InstallPath = "C:\Temp\Office",
         
         [Parameter(Mandatory = $false)]
-        [bool]$NeedsMigration = $false
+        [bool]$NeedsMigration = $false,
+        
+        [Parameter(Mandatory = $false)]
+        [switch]$Force
     )
     
     $result = [PSCustomObject]@{
@@ -219,9 +230,48 @@ Function Start-Preinstall {
         ConfigXmlPath   = $null
         FilesDownloaded = $false
         ErrorMessage    = $null
+        AlreadyExecuted = $false
     }
     
+    # Ruta del registro para guardar el estado de preinstalacion
+    $regPath = "HKLM:\SOFTWARE\OndoanDeploy\Office64"
+    $regValueName = "PreinstallCompleted"
+    
     try {
+        # Verificar si ya se ejecuto anteriormente
+        if (-not $Force) {
+            if (Test-Path -Path $regPath) {
+                $preinstallCompleted = Get-ItemProperty -Path $regPath -Name $regValueName -ErrorAction SilentlyContinue
+                
+                if ($preinstallCompleted -and $preinstallCompleted.$regValueName -eq 1) {
+                    Write-Host "=== PREPARACIoN YA COMPLETADA ANTERIORMENTE ===" -ForegroundColor Green
+                    Write-Host "Los archivos ya fueron descargados previamente." -ForegroundColor Cyan
+                    Write-Host "Use el parametro -Force para forzar la descarga nuevamente." -ForegroundColor Yellow
+                    
+                    # Verificar que los archivos aun existen
+                    $setupPath = Join-Path -Path $InstallPath -ChildPath "setup.exe"
+                    $configPath = Join-Path -Path $InstallPath -ChildPath 'configuration.xml'
+                    
+                    if ((Test-Path -Path $setupPath) -and (Test-Path -Path $configPath)) {
+                        $result.Success = $true
+                        $result.SetupExePath = $setupPath
+                        $result.ConfigXmlPath = $configPath
+                        $result.FilesDownloaded = $true
+                        $result.AlreadyExecuted = $true
+                        
+                        Write-Host "Archivos verificados en: $InstallPath" -ForegroundColor Green
+                        return $result
+                    }
+                    else {
+                        Write-Host "Los archivos no se encontraron. Procediendo con la descarga..." -ForegroundColor Yellow
+                    }
+                }
+            }
+        }
+        else {
+            Write-Host "Parametro -Force detectado. Forzando nueva descarga..." -ForegroundColor Yellow
+        }
+        
         Write-Host "=== PREPARACIoN DE INSTALACION ===" -ForegroundColor Cyan
         
         # Crear directorio si no existe
@@ -283,6 +333,13 @@ Function Start-Preinstall {
         
         $result.FilesDownloaded = $true
         $result.Success = $true
+        
+        # Marcar en el registro que la preinstalacion se completo
+        if (-not (Test-Path -Path $regPath)) {
+            New-Item -Path $regPath -Force | Out-Null
+        }
+        Set-ItemProperty -Path $regPath -Name $regValueName -Value 1 -Type DWord
+        Write-Verbose "Marcador de preinstalacion guardado en el registro"
         
         Write-Host "`n? Preparacion completada exitosamente" -ForegroundColor Green
         
@@ -615,7 +672,7 @@ Function Start-Deploy {
         # FASE 2: Preparacion
         $deployResult.Phase = "Preparacion"
         Write-Host "`n=== FASE 2: PREPARACIoN ===" -ForegroundColor Cyan
-        $preinstallResult = Start-Preinstall -InstallPath $InstallPath -NeedsMigration $testResult.NeedsMigration
+        $preinstallResult = Start-Preinstall -InstallPath $InstallPath -NeedsMigration $testResult.NeedsMigration -Force:$Force
         $deployResult.PreinstallResult = $preinstallResult
         
         if (-not $preinstallResult.Success) {

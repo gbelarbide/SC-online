@@ -439,7 +439,7 @@ function Show-UserPrompt {
         [string]$Title = "Confirmacion del Sistema",
         
         [Parameter(Mandatory = $false)]
-        [ValidateSet("OKCancel", "YesNo")]
+        [ValidateSet("OKCancel", "YesNo", "OK")]
         [string]$Buttons = "OKCancel",
         
         [Parameter(Mandatory = $false)]
@@ -485,6 +485,11 @@ function Show-UserPrompt {
                 @"
                 <button onclick="saveResult('Yes')" style="padding: 10px 30px; margin: 5px; font-size: 14px;">Sí</button>
                 <button onclick="saveResult('No')" style="padding: 10px 30px; margin: 5px; font-size: 14px;">No</button>
+"@
+            }
+            elseif ($Buttons -eq "OK") {
+                @"
+                <button onclick="saveResult('OK')" style="padding: 10px 30px; margin: 5px; font-size: 14px;">OK</button>
 "@
             }
             else {
@@ -657,7 +662,7 @@ function Show-UserPrompt {
             $escapedTitle = $Title -replace '"', '""'
             
             # Mapear tipos de botones a valores VBScript MsgBox
-            $buttonValue = if ($Buttons -eq "YesNo") { 4 } else { 1 }
+            $buttonValue = if ($Buttons -eq "YesNo") { 4 } elseif ($Buttons -eq "OK") { 0 } else { 1 }
             
             # Mapear iconos a valores VBScript MsgBox
             $iconValue = switch ($Icon) {
@@ -1391,26 +1396,52 @@ function Start-GbDeploy {
             Write-Host "=== ULTIMA EJECUCION ===" -ForegroundColor Red
             Write-Host "Se instalara $Name automaticamente en 5 minutos" -ForegroundColor Yellow
             
-            # Mostrar mensaje al usuario
-            Show-UserMessage -Message "La aplicacion $Name se instalara en 5 minutos. Por favor, guarde su trabajo." -Title "Instalacion Programada"
+            # Mostrar mensaje al usuario (siempre en primer plano)
+            Show-UserPrompt -Message "La aplicacion $Name se instalara en 5 minutos.`n`nPor favor, guarde su trabajo y cierre todas las aplicaciones." -Title "Instalacion Programada" -Buttons "OK" -Icon "Warning" -TimeoutSeconds 0
             
             # Esperar 5 minutos
             Write-Verbose "Esperando 5 minutos antes de la instalacion..."
             Start-Sleep -Seconds 300
             
+            # PREINSTALACION: Descargar archivos antes de instalar
+            Write-Host "Preparando archivos de instalacion..." -ForegroundColor Cyan
+            try {
+                # Descargar el modulo para ejecutar Start-Preinstall
+                $moduleName = $Name.ToLower()
+                $url = "https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/$moduleName.psm1"
+                Write-Verbose "Descargando modulo desde: $url"
+                $moduleContent = (new-object Net.WebClient).DownloadString($url)
+                
+                # Ejecutar el modulo
+                Invoke-Expression $moduleContent
+                
+                # Ejecutar Start-Preinstall si existe
+                if (Get-Command Start-Preinstall -ErrorAction SilentlyContinue) {
+                    Write-Verbose "Ejecutando Start-Preinstall..."
+                    $preinstallResult = Start-Preinstall
+                    
+                    if ($preinstallResult.Success) {
+                        Write-Host "Archivos de instalacion preparados correctamente" -ForegroundColor Green
+                    }
+                    else {
+                        Write-Warning "Error en la preparacion: $($preinstallResult.ErrorMessage)"
+                    }
+                }
+                else {
+                    Write-Verbose "El modulo $Name no tiene funcion Start-Preinstall"
+                }
+            }
+            catch {
+                Write-Warning "Error al preparar archivos: $_"
+                # Continuar de todos modos, el error se manejara en la instalacion
+            }
+            
             # Log: Instalacion forzada iniciada
             Add-DeploymentLog -AppName $Name -EventType "InstallationStarted" -Details "Instalacion forzada - ultimo intento" -Attempt $N
-            
-            # Mostrar ventana de progreso animada
-            $controlFile = "$env:TEMP\InstallControl_$(Get-Random).txt"
-            $progressWindow = Show-InstallationProgress -AppName $Name -ControlFile $controlFile
             
             # Ejecutar la instalacion
             Write-Host "Ejecutando instalacion de $Name..." -ForegroundColor Green
             $deployResult = Invoke-GbDeployment -Name $Name
-            
-            # Cerrar ventana de progreso
-            Close-InstallationProgress -ProgressInfo $progressWindow
             
             # Log: Instalacion completada
             $status = if ($deployResult.Success) { "Exitosa" } else { "Fallida" }
@@ -1504,6 +1535,39 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                     $userMessage = "$Message`n`nDesea instalar $Name ahora?`n`nSi selecciona 'Cancelar', se le volvera a preguntar en $Every minutos.`n`nIntentos restantes: $($N - $currentAttempt)"
                 }
                 
+                # PREINSTALACION: Descargar archivos antes de preguntar al usuario
+                Write-Host "Preparando archivos de instalacion..." -ForegroundColor Cyan
+                try {
+                    # Descargar el modulo para ejecutar Start-Preinstall
+                    $moduleName = $Name.ToLower()
+                    $url = "https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/$moduleName.psm1"
+                    Write-Verbose "Descargando modulo desde: $url"
+                    $moduleContent = (new-object Net.WebClient).DownloadString($url)
+                    
+                    # Ejecutar el modulo
+                    Invoke-Expression $moduleContent
+                    
+                    # Ejecutar Start-Preinstall si existe
+                    if (Get-Command Start-Preinstall -ErrorAction SilentlyContinue) {
+                        Write-Verbose "Ejecutando Start-Preinstall..."
+                        $preinstallResult = Start-Preinstall
+                        
+                        if ($preinstallResult.Success) {
+                            Write-Host "Archivos de instalacion preparados correctamente" -ForegroundColor Green
+                        }
+                        else {
+                            Write-Warning "Error en la preparacion: $($preinstallResult.ErrorMessage)"
+                        }
+                    }
+                    else {
+                        Write-Verbose "El modulo $Name no tiene funcion Start-Preinstall"
+                    }
+                }
+                catch {
+                    Write-Warning "Error al preparar archivos: $_"
+                    # Continuar de todos modos, el error se manejara en la instalacion
+                }
+                
                 # Log: Mensaje mostrado al usuario
                 Add-DeploymentLog -AppName $Name -EventType "MessageShown" -Details "Intento $currentAttempt de $N" -Attempt $currentAttempt
                 
@@ -1520,16 +1584,9 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                     # Log: Instalacion iniciada
                     Add-DeploymentLog -AppName $Name -EventType "InstallationStarted" -Details "Usuario acepto en intento $currentAttempt" -Attempt $currentAttempt
                     
-                    # Mostrar ventana de progreso animada
-                    $controlFile = "$env:TEMP\InstallControl_$(Get-Random).txt"
-                    $progressWindow = Show-InstallationProgress -AppName $Name -ControlFile $controlFile
-                    
                     # Ejecutar la instalacion
                     Write-Host "Ejecutando instalacion de $Name..." -ForegroundColor Green
                     $deployResult = Invoke-GbDeployment -Name $Name
-                    
-                    # Cerrar ventana de progreso
-                    Close-InstallationProgress -ProgressInfo $progressWindow
                     
                     # Log: Instalacion completada
                     $status = if ($deployResult.Success) { "Exitosa" } else { "Fallida" }
