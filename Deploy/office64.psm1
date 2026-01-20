@@ -252,7 +252,7 @@ Function Start-Preinstall {
         
         $configPath = Join-Path -Path $InstallPath -ChildPath 'configuration.xml'
         $configXML | Out-File -FilePath $configPath -Encoding UTF8 -Force
-        Write-Host "Archivo de configuracion creado: $configPath" -ForegroundColor Green
+        Write-Host 'Archivo de configuracion creado: $configPath' -ForegroundColor Green
         $result.ConfigXmlPath = $configPath
         
         # Descargar Office Deployment Tool
