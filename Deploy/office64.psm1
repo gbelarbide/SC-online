@@ -250,7 +250,7 @@ Function Start-Preinstall {
 </Configuration>
 "@
         
-        $configPath = Join-Path -Path $InstallPath -ChildPath "configuration.xml"
+        $configPath = Join-Path -Path $InstallPath -ChildPath 'configuration.xml'
         $configXML | Out-File -FilePath $configPath -Encoding UTF8 -Force
         Write-Host "Archivo de configuración creado: $configPath" -ForegroundColor Green
         $result.ConfigXmlPath = $configPath
