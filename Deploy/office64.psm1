@@ -20,17 +20,17 @@
 Function Test-OfficeInstalled {
     <#
     .SYNOPSIS
-        Comprueba si Microsoft Office está instalado en el sistema
+        Comprueba si Microsoft Office esta instalado en el sistema
     
     .DESCRIPTION
         Verifica la existencia de Office comprobando el registro de Windows
-        y determina si es versión de 32 o 64 bits
+        y determina si es version de 32 o 64 bits
     
     .OUTPUTS
         PSCustomObject con propiedades:
-        - IsInstalled: Boolean indicando si Office está instalado
+        - IsInstalled: Boolean indicando si Office esta instalado
         - Architecture: String con "32-bit", "64-bit" o $null
-        - Version: String con la versión instalada o $null
+        - Version: String con la version instalada o $null
     #>
     
     [CmdletBinding()]
@@ -112,8 +112,8 @@ Function Test-Installed {
         Verifica el estado de Office y los prerequisitos del sistema
     
     .DESCRIPTION
-        Comprueba si Office está instalado, su arquitectura, versión y verifica
-        que el sistema cumple con los prerequisitos necesarios para la instalación
+        Comprueba si Office esta instalado, su arquitectura, version y verifica
+        que el sistema cumple con los prerequisitos necesarios para la instalacion
     
     .OUTPUTS
         PSCustomObject con información detallada del estado de Office y prerequisitos
@@ -144,7 +144,7 @@ Function Test-Installed {
     $minDiskSpaceGB = 10
     $hasDiskSpace = $freeSpaceGB -ge $minDiskSpaceGB
     
-    # Determinar si necesita migración
+    # Determinar si necesita migracion
     $needsMigration = $officeInfo.IsInstalled -and $officeInfo.Architecture -eq "32-bit"
     
     # Crear objeto de resultado
@@ -166,8 +166,8 @@ Function Test-Installed {
     Write-Verbose "Estado de Office:"
     Write-Verbose "  - Instalado: $($result.IsInstalled)"
     Write-Verbose "  - Arquitectura: $($result.Architecture)"
-    Write-Verbose "  - Versión: $($result.Version)"
-    Write-Verbose "  - Necesita migración: $($result.NeedsMigration)"
+    Write-Verbose "  - Version: $($result.Version)"
+    Write-Verbose "  - Necesita migracion: $($result.NeedsMigration)"
     Write-Verbose "Prerequisitos:"
     Write-Verbose "  - Permisos de administrador: $hasAdminRights"
     Write-Verbose "  - Espacio en disco: $freeSpaceGB GB (mínimo: $minDiskSpaceGB GB)"
@@ -179,17 +179,17 @@ Function Test-Installed {
 Function Start-Preinstall {
     <#
     .SYNOPSIS
-        Prepara los archivos necesarios para la instalación de Office 64-bit
+        Prepara los archivos necesarios para la instalacion de Office 64-bit
     
     .DESCRIPTION
         Descarga Office Deployment Tool, lo extrae, crea el archivo de configuración XML
-        y descarga los archivos de instalación de Office 64-bit
+        y descarga los archivos de instalacion de Office 64-bit
     
     .PARAMETER InstallPath
         Ruta donde se descargarán los archivos (por defecto: C:\Temp\Office)
     
     .PARAMETER NeedsMigration
-        Indica si se necesita migración de 32-bit a 64-bit
+        Indica si se necesita migracion de 32-bit a 64-bit
     
     .OUTPUTS
         PSCustomObject con información sobre los archivos descargados
@@ -221,7 +221,7 @@ Function Start-Preinstall {
     }
     
     try {
-        Write-Host "=== PREPARACIÓN DE INSTALACIÓN ===" -ForegroundColor Cyan
+        Write-Host "=== PREPARACIÓN DE INSTALACION ===" -ForegroundColor Cyan
         
         # Crear directorio si no existe
         if (-not (Test-Path -Path $InstallPath)) {
@@ -283,12 +283,12 @@ Function Start-Preinstall {
         $result.FilesDownloaded = $true
         $result.Success = $true
         
-        Write-Host "`n✓ Preparación completada exitosamente" -ForegroundColor Green
+        Write-Host "`n✓ Preparacion completada exitosamente" -ForegroundColor Green
         
     }
     catch {
         $result.ErrorMessage = $_.Exception.Message
-        Write-Error "Error durante la preparación: $_"
+        Write-Error "Error durante la preparacion: $_"
     }
     
     return $result
@@ -297,11 +297,11 @@ Function Start-Preinstall {
 Function Start-PostInstall {
     <#
     .SYNOPSIS
-        Verifica la instalación y limpia archivos temporales
+        Verifica la instalacion y limpia archivos temporales
     
     .DESCRIPTION
         Verifica que Office 64-bit se instaló correctamente y opcionalmente
-        limpia los archivos temporales de instalación
+        limpia los archivos temporales de instalacion
     
     .PARAMETER InstallPath
         Ruta de los archivos temporales a limpiar
@@ -310,7 +310,7 @@ Function Start-PostInstall {
         Si se especifica, no elimina los archivos temporales
     
     .OUTPUTS
-        PSCustomObject con el resultado de la verificación
+        PSCustomObject con el resultado de la verificacion
     
     .EXAMPLE
         $postinstall = Start-PostInstall -InstallPath "C:\Temp\Office"
@@ -339,13 +339,13 @@ Function Start-PostInstall {
     }
     
     try {
-        Write-Host "`n=== VERIFICACIÓN POST-INSTALACIÓN ===" -ForegroundColor Cyan
+        Write-Host "`n=== VERIFICACIÓN POST-INSTALACION ===" -ForegroundColor Cyan
         
         # Esperar un momento para que el sistema se actualice
         Write-Host "Esperando actualización del sistema..." -ForegroundColor Yellow
         Start-Sleep -Seconds 5
         
-        # Verificar la instalación
+        # Verificar la instalacion
         $verificationInfo = Test-OfficeInstalled
         
         if ($verificationInfo.IsInstalled -and $verificationInfo.Architecture -eq "64-bit") {
@@ -353,23 +353,23 @@ Function Start-PostInstall {
             $result.InstalledVersion = $verificationInfo.Version
             $result.InstalledArchitecture = "64-bit"
             
-            Write-Host "`n✓ INSTALACIÓN EXITOSA" -ForegroundColor Green
+            Write-Host "`n[OK] INSTALACION EXITOSA" -ForegroundColor Green
             Write-Host "Office 64-bit instalado correctamente" -ForegroundColor Green
-            Write-Host "Versión: $($verificationInfo.Version)" -ForegroundColor Cyan
+            Write-Host "Version: $($verificationInfo.Version)" -ForegroundColor Cyan
             Write-Host "Arquitectura: 64-bit" -ForegroundColor Cyan
         }
         elseif ($verificationInfo.IsInstalled -and $verificationInfo.Architecture -eq "32-bit") {
             $result.InstalledVersion = $verificationInfo.Version
             $result.InstalledArchitecture = "32-bit"
             
-            Write-Host "`n⚠ ADVERTENCIA" -ForegroundColor Yellow
-            Write-Host "Office está instalado pero sigue siendo la versión de 32-bit" -ForegroundColor Yellow
-            Write-Host "Versión: $($verificationInfo.Version)" -ForegroundColor Cyan
-            Write-Host "Es posible que la migración no se haya completado correctamente." -ForegroundColor Yellow
+            Write-Host "`n[!] ADVERTENCIA" -ForegroundColor Yellow
+            Write-Host "Office esta instalado pero sigue siendo la version de 32-bit" -ForegroundColor Yellow
+            Write-Host "Version: $($verificationInfo.Version)" -ForegroundColor Cyan
+            Write-Host "Es posible que la migracion no se haya completado correctamente." -ForegroundColor Yellow
         }
         else {
-            Write-Host "`n✗ ERROR" -ForegroundColor Red
-            Write-Host "No se pudo verificar la instalación de Office 64-bit" -ForegroundColor Red
+            Write-Host "`n[X] ERROR" -ForegroundColor Red
+            Write-Host "No se pudo verificar la instalacion de Office 64-bit" -ForegroundColor Red
         }
         
         # Limpiar archivos temporales si se solicita
@@ -394,17 +394,16 @@ Function Start-PostInstall {
     }
     catch {
         $result.ErrorMessage = $_.Exception.Message
-        Write-Error "Error durante la verificación post-instalación: $_"
+        Write-Error "Error durante la verificacion post-instalacion: $_"
     }
     
     return $result
 }
 
-
 Function Start-Install {
     <#
     .SYNOPSIS
-        Ejecuta la instalación/migración de Office 64-bit
+        Ejecuta la instalacion/migracion de Office 64-bit
     
     .DESCRIPTION
         Ejecuta setup.exe con el archivo de configuración XML para instalar o migrar Office 64-bit.
@@ -417,15 +416,15 @@ Function Start-Install {
         Ruta completa al archivo de configuración XML
     
     .PARAMETER NeedsMigration
-        Indica si es una migración de 32-bit a 64-bit
+        Indica si es una migracion de 32-bit a 64-bit
     
     .OUTPUTS
-        PSCustomObject con el resultado de la instalación
+        PSCustomObject con el resultado de la instalacion
     
     .EXAMPLE
         $install = Start-Install -SetupExePath "C:\Temp\Office\setup.exe" -ConfigXmlPath "C:\Temp\Office\configuration.xml"
         if ($install.Success) {
-            Write-Host "Instalación exitosa"
+            Write-Host "Instalacion exitosa"
         }
     #>
     
@@ -451,7 +450,7 @@ Function Start-Install {
     }
     
     try {
-        Write-Host "`n=== INSTALACIÓN DE OFFICE 64-BIT ===" -ForegroundColor Cyan
+        Write-Host "`n=== INSTALACION DE OFFICE 64-BIT ===" -ForegroundColor Cyan
         
         # Verificar que los archivos existen
         if (-not (Test-Path -Path $SetupExePath)) {
@@ -462,10 +461,10 @@ Function Start-Install {
             throw "No se encontró el archivo de configuración en: $ConfigXmlPath"
         }
         
-        # Mensaje según tipo de instalación
+        # Mensaje según tipo de instalacion
         if ($NeedsMigration) {
             Write-Host "Migrando de Office 32-bit a 64-bit..." -ForegroundColor Yellow
-            Write-Host "El parámetro MigrateArch preservará su configuración y datos." -ForegroundColor Cyan
+            Write-Host "El parametro MigrateArch preservará su configuración y datos." -ForegroundColor Cyan
         }
         else {
             Write-Host "Instalando Office 64-bit..." -ForegroundColor Yellow
@@ -475,7 +474,7 @@ Function Start-Install {
         Write-Host "Idioma: Español (es-es)" -ForegroundColor Cyan
         Write-Host "`nEsto puede tardar varios minutos..." -ForegroundColor Yellow
         
-        # Ejecutar la instalación
+        # Ejecutar la instalacion
         $startTime = Get-Date
         $process = Start-Process -FilePath $SetupExePath -ArgumentList "/configure `"$ConfigXmlPath`"" -Wait -NoNewWindow -PassThru
         $endTime = Get-Date
@@ -487,10 +486,10 @@ Function Start-Install {
             $result.Success = $true
             
             if ($NeedsMigration) {
-                Write-Host "`n✓ Migración completada exitosamente" -ForegroundColor Green
+                Write-Host "`n[OK] Migracion completada exitosamente" -ForegroundColor Green
             }
             else {
-                Write-Host "`n✓ Instalación completada exitosamente" -ForegroundColor Green
+                Write-Host "`n[OK] Instalacion completada exitosamente" -ForegroundColor Green
             }
             
             Write-Host "Duración: $($result.Duration.ToString('mm\:ss'))" -ForegroundColor Cyan
@@ -502,7 +501,7 @@ Function Start-Install {
     }
     catch {
         $result.ErrorMessage = $_.Exception.Message
-        Write-Error "Error durante la instalación: $_"
+        Write-Error "Error durante la instalacion: $_"
     }
     
     return $result
@@ -514,20 +513,20 @@ Function Start-Deploy {
         Orquesta el despliegue completo de Office 64-bit
     
     .DESCRIPTION
-        Función principal que coordina todo el flujo de instalación de Office 64-bit:
+        Función principal que coordina todo el flujo de instalacion de Office 64-bit:
         1. Verifica el estado actual y prerequisitos (Test-Installed)
         2. Descarga los archivos necesarios (Start-Preinstall)
-        3. Ejecuta la instalación/migración (Start-Install)
+        3. Ejecuta la instalacion/migracion (Start-Install)
         4. Verifica y limpia (Start-PostInstall)
     
     .PARAMETER InstallPath
         Ruta donde se descargarán los archivos temporales (por defecto: C:\Temp\Office)
     
     .PARAMETER Force
-        Fuerza la instalación incluso si Office 64-bit ya está instalado
+        Fuerza la instalacion incluso si Office 64-bit ya esta instalado
     
-    .PARAMETER KeepTempFiles
-        No elimina los archivos temporales después de la instalación
+    .PARAMETER KeepFiles
+        No elimina los archivos temporales después de la instalacion
     
     .OUTPUTS
         PSCustomObject con el resultado completo del despliegue
@@ -538,7 +537,7 @@ Function Start-Deploy {
     
     .EXAMPLE
         Start-Deploy -Force -KeepTempFiles
-        Fuerza la reinstalación y conserva los archivos temporales
+        Fuerza la reinstalacion y conserva los archivos temporales
     
     .EXAMPLE
         $result = Start-Deploy -InstallPath "D:\Temp\Office"
@@ -577,9 +576,9 @@ Function Start-Deploy {
         Write-Host "================================================================" -ForegroundColor Cyan
         Write-Host ""
         
-        # FASE 1: Verificación
-        $deployResult.Phase = "Verificación"
-        Write-Host "═══ FASE 1: VERIFICACIÓN ═══" -ForegroundColor Cyan
+        # FASE 1: Verificacion
+        $deployResult.Phase = "Verificacion"
+        Write-Host "=== FASE 1: VERIFICACION ===" -ForegroundColor Cyan
         $testResult = Test-Installed
         $deployResult.TestResult = $testResult
         
@@ -588,7 +587,7 @@ Function Start-Deploy {
         Write-Host "  Office instalado: $($testResult.IsInstalled)" -ForegroundColor Cyan
         if ($testResult.IsInstalled) {
             Write-Host "  Arquitectura: $($testResult.Architecture)" -ForegroundColor Cyan
-            Write-Host "  Versión: $($testResult.Version)" -ForegroundColor Cyan
+            Write-Host "  Version: $($testResult.Version)" -ForegroundColor Cyan
         }
         Write-Host "  Permisos de administrador: $($testResult.Prerequisites.HasAdminRights)" -ForegroundColor Cyan
         Write-Host "  Espacio en disco: $($testResult.Prerequisites.FreeSpaceGB) GB" -ForegroundColor Cyan
@@ -605,38 +604,38 @@ Function Start-Deploy {
         
         # Decidir si proceder
         if ($testResult.IsInstalled -and $testResult.Architecture -eq "64-bit" -and -not $Force) {
-            Write-Host "`n✓ Office 64-bit ya está instalado" -ForegroundColor Green
-            Write-Host "Versión: $($testResult.Version)" -ForegroundColor Cyan
-            Write-Host "Use el parámetro -Force para reinstalar" -ForegroundColor Yellow
+            Write-Host "`n[OK] Office 64-bit ya esta instalado" -ForegroundColor Green
+            Write-Host "Version: $($testResult.Version)" -ForegroundColor Cyan
+            Write-Host "Use el parametro -Force para reinstalar" -ForegroundColor Yellow
             $deployResult.Success = $true
             return $deployResult
         }
         
-        # FASE 2: Preparación
-        $deployResult.Phase = "Preparación"
-        Write-Host "`n═══ FASE 2: PREPARACIÓN ═══" -ForegroundColor Cyan
+        # FASE 2: Preparacion
+        $deployResult.Phase = "Preparacion"
+        Write-Host "`n=== FASE 2: PREPARACIÓN ===" -ForegroundColor Cyan
         $preinstallResult = Start-Preinstall -InstallPath $InstallPath -NeedsMigration $testResult.NeedsMigration
         $deployResult.PreinstallResult = $preinstallResult
         
         if (-not $preinstallResult.Success) {
-            throw "Error en la preparación: $($preinstallResult.ErrorMessage)"
+            throw "Error en la preparacion: $($preinstallResult.ErrorMessage)"
         }
         
-        # FASE 3: Instalación
-        $deployResult.Phase = "Instalación"
-        Write-Host "`n═══ FASE 3: INSTALACIÓN ═══" -ForegroundColor Cyan
+        # FASE 3: Instalacion
+        $deployResult.Phase = "Instalacion"
+        Write-Host "`n=== FASE 3: INSTALACION ===" -ForegroundColor Cyan
         $installResult = Start-Install -SetupExePath $preinstallResult.SetupExePath `
             -ConfigXmlPath $preinstallResult.ConfigXmlPath `
             -NeedsMigration $testResult.NeedsMigration
         $deployResult.InstallResult = $installResult
         
         if (-not $installResult.Success) {
-            throw "Error en la instalación: $($installResult.ErrorMessage)"
+            throw "Error en la instalacion: $($installResult.ErrorMessage)"
         }
         
-        # FASE 4: Verificación Post-Instalación
-        $deployResult.Phase = "Verificación Post-Instalación"
-        Write-Host "`n═══ FASE 4: VERIFICACIÓN POST-INSTALACIÓN ═══" -ForegroundColor Cyan
+        # FASE 4: Verificacion Post-Instalacion
+        $deployResult.Phase = "Verificacion Post-Instalacion"
+        Write-Host "`n=== FASE 4: VERIFICACIÓN POST-INSTALACION ===" -ForegroundColor Cyan
         $postInstallResult = Start-PostInstall -InstallPath $InstallPath -KeepFiles:$KeepTempFiles
         $deployResult.PostInstallResult = $postInstallResult
         
@@ -648,22 +647,22 @@ Function Start-Deploy {
             Write-Host "================================================================" -ForegroundColor Green
             Write-Host ""
             Write-Host "Resumen:" -ForegroundColor Cyan
-            Write-Host "  Versión instalada: $($postInstallResult.InstalledVersion)" -ForegroundColor Green
+            Write-Host "  Version instalada: $($postInstallResult.InstalledVersion)" -ForegroundColor Green
             Write-Host "  Arquitectura: $($postInstallResult.InstalledArchitecture)" -ForegroundColor Green
-            Write-Host "  Duración de instalación: $($installResult.Duration.ToString('mm\:ss'))" -ForegroundColor Cyan
+            Write-Host "  Duración de instalacion: $($installResult.Duration.ToString('mm\:ss'))" -ForegroundColor Cyan
             Write-Host "  Canal: MonthlyEnterprise (Empresas)" -ForegroundColor Cyan
             Write-Host "  Idioma: Español (es-es)" -ForegroundColor Cyan
             
             if ($testResult.NeedsMigration) {
-                Write-Host "  Tipo: Migración de 32-bit a 64-bit" -ForegroundColor Cyan
+                Write-Host "  Tipo: Migracion de 32-bit a 64-bit" -ForegroundColor Cyan
             }
             else {
-                Write-Host "  Tipo: Instalación nueva" -ForegroundColor Cyan
+                Write-Host "  Tipo: Instalacion nueva" -ForegroundColor Cyan
             }
         }
         else {
-            Write-Host "`n⚠ ADVERTENCIA: La verificación post-instalación falló" -ForegroundColor Yellow
-            Write-Host "La instalación puede no haberse completado correctamente" -ForegroundColor Yellow
+            Write-Host "`n[!] ADVERTENCIA: La verificacion post-instalacion fallo" -ForegroundColor Yellow
+            Write-Host "La instalacion puede no haberse completado correctamente" -ForegroundColor Yellow
         }
     }
     catch {
