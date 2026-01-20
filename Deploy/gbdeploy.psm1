@@ -836,6 +836,108 @@ function Add-DeploymentLog {
     }
 }
 
+function Get-DeploymentLog {
+    <#
+    .SYNOPSIS
+        Recupera los logs de despliegue del registro de Windows.
+    
+    .DESCRIPTION
+        Lee las entradas de log del registro para una aplicación específica.
+        Los logs se leen de HKLM:\SOFTWARE\ondoan\Deployments\<AppName>\Logs
+    
+    .PARAMETER AppName
+        Nombre de la aplicacion para la cual recuperar los logs
+    
+    .PARAMETER EventType
+        Filtrar por tipo de evento específico (opcional)
+    
+    .PARAMETER Attempt
+        Filtrar por número de intento específico (opcional)
+    
+    .PARAMETER Last
+        Devolver solo los últimos N logs
+    
+    .OUTPUTS
+        Array de PSCustomObject con las propiedades Timestamp, EventType, Details, Attempt
+    
+    .EXAMPLE
+        Get-DeploymentLog -AppName "office64"
+        Obtiene todos los logs de office64
+    
+    .EXAMPLE
+        Get-DeploymentLog -AppName "test" -EventType "UserResponse"
+        Obtiene solo los logs de respuesta de usuario
+    
+    .EXAMPLE
+        Get-DeploymentLog -AppName "office64" -Last 10
+        Obtiene los últimos 10 logs
+    #>
+    [CmdletBinding()]
+    [OutputType([PSCustomObject[]])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$AppName,
+        
+        [Parameter(Mandatory = $false)]
+        [ValidateSet("MessageShown", "UserResponse", "InstallationStarted", "InstallationCompleted")]
+        [string]$EventType,
+        
+        [Parameter(Mandatory = $false)]
+        [int]$Attempt,
+        
+        [Parameter(Mandatory = $false)]
+        [int]$Last
+    )
+    
+    try {
+        $logsPath = "HKLM:\SOFTWARE\ondoan\Deployments\$AppName\Logs"
+        
+        if (-not (Test-Path $logsPath)) {
+            Write-Warning "No se encontraron logs para la aplicacion: $AppName"
+            return @()
+        }
+        
+        # Obtener todas las entradas de log
+        $logEntries = Get-ChildItem -Path $logsPath | ForEach-Object {
+            $logEntry = Get-ItemProperty -Path $_.PSPath
+            
+            [PSCustomObject]@{
+                Timestamp = $logEntry.Timestamp
+                EventType = $logEntry.EventType
+                Details   = $logEntry.Details
+                Attempt   = $logEntry.Attempt
+                EntryName = $_.PSChildName
+            }
+        }
+        
+        # Aplicar filtros si se especificaron
+        if ($EventType) {
+            $logEntries = $logEntries | Where-Object { $_.EventType -eq $EventType }
+        }
+        
+        if ($Attempt) {
+            $logEntries = $logEntries | Where-Object { $_.Attempt -eq $Attempt }
+        }
+        
+        # Ordenar por timestamp (más reciente primero)
+        $logEntries = $logEntries | Sort-Object -Property EntryName -Descending
+        
+        # Aplicar límite si se especificó
+        if ($Last) {
+            $logEntries = $logEntries | Select-Object -First $Last
+        }
+        
+        # Remover la propiedad EntryName antes de devolver
+        $logEntries | Select-Object -Property Timestamp, EventType, Details, Attempt
+        
+        return $logEntries
+    }
+    catch {
+        Write-Warning "Error al recuperar logs: $_"
+        return @()
+    }
+}
+
 function Start-GbDeploy {
     <#
     .SYNOPSIS
