@@ -705,7 +705,7 @@ Function Get-DeployCnf {
     return [PSCustomObject]@{
         N       = 3
         Every   = 60
-        Message = "Gbelarbide:Se requiere actualizar Office a la version de 64-bit para mejorar el rendimiento y compatibilidad. Durante la actualizacion podras usar tu ordenador, pero no podras usar las aplicaciones de Office."
+        Message = "Se requiere actualizar Office a la version de 64-bit para mejorar el rendimiento y compatibilidad. Durante la actualizacion podras usar tu ordenador, pero no podras usar las aplicaciones de Office."
     }
 }
 
