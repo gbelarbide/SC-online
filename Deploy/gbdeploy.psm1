@@ -104,15 +104,12 @@ function Show-UserMessage {
 function Show-InstallationProgress {
     <#
     .SYNOPSIS
-        Muestra un mensaje animado de instalación en curso con puntos animados.
+        Muestra ventana de instalación que permanece en primer plano.
     
     .DESCRIPTION
-        Esta función crea una ventana HTA que muestra un mensaje de instalación con animación
-        de puntos (...) y permanece siempre en primer plano. La ventana se cierra
-        usando Stop-Process cuando la instalación termina.
-        
-        Funciona tanto en contexto de usuario como de SYSTEM, mostrando la ventana
-        en la sesión del usuario activo cuando es necesario.
+        Usa la técnica de ventana padre TopMost invisible + ShowDialog para
+        garantizar que la ventana permanezca siempre en primer plano.
+        Funciona en contexto de usuario y SYSTEM (con tareas programadas).
     
     .PARAMETER AppName
         Nombre de la aplicación que se está instalando.
@@ -121,9 +118,6 @@ function Show-InstallationProgress {
         $progressWindow = Show-InstallationProgress -AppName "Office 64-bit"
         # ... realizar instalación ...
         Close-InstallationProgress -ProgressInfo $progressWindow
-    
-    .OUTPUTS
-        Devuelve un objeto con el proceso de mshta.exe, la ruta del HTA y el nombre de la tarea (si aplica).
     #>
     [CmdletBinding()]
     param(
@@ -132,255 +126,163 @@ function Show-InstallationProgress {
     )
     
     try {
-        # Detectar si estamos ejecutando como SYSTEM
         $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent()
         $isSystem = $currentUser.IsSystem
-        
         Write-Verbose "Ejecutando como: $($currentUser.Name), IsSystem: $isSystem"
         
-        # Obtener mensaje de branding
-        $brandingMessage = "DeployCnf"  # Valor por defecto
+        # Obtener branding
+        $brandingMessage = "DeployCnf"
         try {
             if (Get-Command Get-DeployCnf -ErrorAction SilentlyContinue) {
                 $cnfResult = Get-DeployCnf
                 if ($cnfResult) {
-                    # Intentar parsear como JSON
                     try {
                         $cnfObject = $cnfResult | ConvertFrom-Json
-                        if ($cnfObject.Message) {
-                            $brandingMessage = $cnfObject.Message
-                        }
-                        else {
-                            # Si no tiene propiedad Message, usar el resultado completo
-                            $brandingMessage = $cnfResult
-                        }
+                        if ($cnfObject.Message) { $brandingMessage = $cnfObject.Message }
+                        else { $brandingMessage = $cnfResult }
                     }
-                    catch {
-                        # Si no es JSON, usar el resultado como está
-                        $brandingMessage = $cnfResult
-                    }
+                    catch { $brandingMessage = $cnfResult }
                 }
             }
         }
-        catch {
-            Write-Verbose "No se pudo obtener mensaje de Get-DeployCnf, usando valor por defecto"
-        }
+        catch { Write-Verbose "Usando branding por defecto" }
         
-        # Escapar caracteres especiales para HTML
-        $escapedAppName = $AppName -replace '<', '&lt;' -replace '>', '&gt;' -replace '"', '&quot;'
-        $escapedBranding = $brandingMessage -replace '<', '&lt;' -replace '>', '&gt;' -replace '"', '&quot;' -replace "`r`n", '<br>' -replace "`n", '<br>'
+        # Escapar para script
+        $escapedAppName = $AppName -replace "'", "''"
+        $escapedBranding = $brandingMessage -replace "'", "''" -replace "`r`n", "`n" -replace "`n", " - "
         
-        # Determinar carpeta temporal
+        # Carpeta temporal
         $tempFolder = if ($isSystem) { "C:\ProgramData\Temp" } else { $env:TEMP }
         if (-not (Test-Path $tempFolder)) {
             New-Item -Path $tempFolder -ItemType Directory -Force | Out-Null
         }
         
-        # Crear contenido HTA con animación
-        $htaPath = "$tempFolder\InstallProgress_$(Get-Random).hta"
-        $htaContent = @"
-<html>
-<head>
-    <title>Instalación en Curso</title>
-    <HTA:APPLICATION
-        APPLICATIONNAME="InstallationProgress"
-        BORDER="dialog"
-        BORDERSTYLE="normal"
-        CAPTION="yes"
-        MAXIMIZEBUTTON="no"
-        MINIMIZEBUTTON="no"
-        SCROLL="no"
-        SHOWINTASKBAR="yes"
-        SINGLEINSTANCE="yes"
-        SYSMENU="no"
-        WINDOWSTATE="normal"
-    />
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 0;
-            background: #f5f5f5;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            overflow: hidden;
-        }
-        .container {
-            background-color: white;
-            padding: 40px;
-            border: 2px solid #333;
-            border-radius: 8px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-            text-align: center;
-            min-width: 450px;
-        }
-        .logo {
-            font-size: 14px;
-            font-weight: 400;
-            color: #666;
-            margin-bottom: 20px;
-            letter-spacing: 0.5px;
-            line-height: 1.4;
-        }
-        h1 {
-            color: #000;
-            font-size: 24px;
-            margin: 20px 0 10px 0;
-            font-weight: 600;
-        }
-        .app-name {
-            color: #333;
-            font-weight: 600;
-            font-size: 20px;
-            margin: 10px 0;
-        }
-        .message {
-            color: #666;
-            font-size: 16px;
-            line-height: 1.6;
-            margin: 20px 0;
-        }
-        .warning {
-            background-color: #f0f0f0;
-            border: 2px solid #000;
-            border-radius: 4px;
-            padding: 15px;
-            margin: 20px 0;
-            color: #000;
-            font-weight: 600;
-            font-size: 15px;
-        }
-        .dots {
-            display: inline-block;
-            width: 60px;
-            text-align: left;
-            font-size: 32px;
-            font-weight: bold;
-            color: #000;
-        }
-        .spinner {
-            border: 4px solid #e0e0e0;
-            border-top: 4px solid #000;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    </style>
-    <script>
-        var dotCount = 0;
-        
-        function updateDots() {
-            dotCount = (dotCount + 1) % 4;
-            var dots = '';
-            for (var i = 0; i < dotCount; i++) {
-                dots += '.';
-            }
-            document.getElementById('dots').innerHTML = dots;
-        }
-        
-        window.onload = function() {
-            // Centrar ventana
-            window.resizeTo(550, 400);
-            window.moveTo((screen.width - 550) / 2, (screen.height - 400) / 2);
-            
-            // Mantener ventana en primer plano
-            setInterval(function() {
-                try {
-                    window.focus();
-                } catch(e) {}
-            }, 1000);
-            
-            // Iniciar animación de puntos
-            setInterval(updateDots, 500);
-        };
-    </script>
-</head>
-<body>
-    <div class="container">
-        <div class="logo">$escapedBranding</div>
-        <h1 id="status">INSTALANDO</h1>
-        <div class="app-name">$escapedAppName<span class="dots" id="dots"></span></div> 
-    </div>
-</body>
-</html>
+        # Script que muestra la ventana con técnica TopMost + ShowDialog
+        $scriptPath = "$tempFolder\ShowInstallProgress_$(Get-Random).ps1"
+        $scriptContent = @"
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
+# TÉCNICA CLAVE: Ventana padre invisible con TopMost
+`$topWindow = New-Object System.Windows.Forms.Form
+`$topWindow.TopMost = `$true
+`$topWindow.WindowState = 'Minimized'
+`$topWindow.ShowInTaskbar = `$false
+
+# Ventana principal
+`$form = New-Object System.Windows.Forms.Form
+`$form.Text = 'Instalando'
+`$form.Size = New-Object System.Drawing.Size(550, 400)
+`$form.StartPosition = 'CenterScreen'
+`$form.FormBorderStyle = 'FixedDialog'
+`$form.MaximizeBox = `$false
+`$form.MinimizeBox = `$false
+`$form.TopMost = `$true
+`$form.BackColor = [System.Drawing.Color]::FromArgb(245, 245, 245)
+`$form.ShowInTaskbar = `$true
+
+# Panel
+`$panel = New-Object System.Windows.Forms.Panel
+`$panel.Size = New-Object System.Drawing.Size(490, 320)
+`$panel.Location = New-Object System.Drawing.Point(30, 30)
+`$panel.BackColor = [System.Drawing.Color]::FromArgb(245, 245, 245)
+`$panel.BorderStyle = 'None'
+
+# Branding
+`$labelBranding = New-Object System.Windows.Forms.Label
+`$labelBranding.Text = '$escapedBranding'
+`$labelBranding.Font = New-Object System.Drawing.Font('Segoe UI', 10)
+`$labelBranding.ForeColor = [System.Drawing.Color]::FromArgb(102, 102, 102)
+`$labelBranding.Size = New-Object System.Drawing.Size(450, 60)
+`$labelBranding.Location = New-Object System.Drawing.Point(20, 20)
+`$labelBranding.TextAlign = 'MiddleCenter'
+
+# Título
+`$labelTitle = New-Object System.Windows.Forms.Label
+`$labelTitle.Text = 'INSTALANDO'
+`$labelTitle.Font = New-Object System.Drawing.Font('Segoe UI', 18, [System.Drawing.FontStyle]::Bold)
+`$labelTitle.ForeColor = [System.Drawing.Color]::Black
+`$labelTitle.Size = New-Object System.Drawing.Size(450, 40)
+`$labelTitle.Location = New-Object System.Drawing.Point(20, 90)
+`$labelTitle.TextAlign = 'MiddleCenter'
+
+# App Name
+`$labelApp = New-Object System.Windows.Forms.Label
+`$labelApp.Text = '$escapedAppName'
+`$labelApp.Font = New-Object System.Drawing.Font('Segoe UI', 14, [System.Drawing.FontStyle]::Bold)
+`$labelApp.ForeColor = [System.Drawing.Color]::FromArgb(51, 51, 51)
+`$labelApp.Size = New-Object System.Drawing.Size(450, 40)
+`$labelApp.Location = New-Object System.Drawing.Point(20, 140)
+`$labelApp.TextAlign = 'MiddleCenter'
+
+# Dots
+`$labelDots = New-Object System.Windows.Forms.Label
+`$labelDots.Text = ''
+`$labelDots.Font = New-Object System.Drawing.Font('Segoe UI', 24, [System.Drawing.FontStyle]::Bold)
+`$labelDots.ForeColor = [System.Drawing.Color]::Black
+`$labelDots.Size = New-Object System.Drawing.Size(450, 50)
+`$labelDots.Location = New-Object System.Drawing.Point(20, 180)
+`$labelDots.TextAlign = 'MiddleCenter'
+
+`$panel.Controls.AddRange(@(`$labelBranding, `$labelTitle, `$labelApp, `$labelDots))
+`$form.Controls.Add(`$panel)
+
+# Timer animación
+`$dotCount = 0
+`$timer = New-Object System.Windows.Forms.Timer
+`$timer.Interval = 500
+`$timer.Add_Tick({
+    `$script:dotCount = (`$script:dotCount + 1) % 4
+    `$labelDots.Text = '.' * `$script:dotCount
+})
+`$timer.Start()
+
+# Prevenir cierre Alt+F4
+`$form.Add_FormClosing({
+    param(`$s, `$e)
+    if (`$e.CloseReason -eq [System.Windows.Forms.CloseReason]::UserClosing) {
+        `$e.Cancel = `$true
+    }
+})
+
+# Guardar referencias globales
+`$global:InstallProgressForm = `$form
+`$global:InstallProgressTimer = `$timer
+`$global:InstallProgressTopWindow = `$topWindow
+
+# CLAVE: ShowDialog con ventana padre TopMost
+[void]`$form.ShowDialog(`$topWindow)
+
+`$topWindow.Dispose()
 "@
         
-        # Guardar HTA
-        $htaContent | Out-File -FilePath $htaPath -Encoding UTF8 -Force
+        $scriptContent | Out-File -FilePath $scriptPath -Encoding UTF8 -Force
         
         $process = $null
         $taskName = $null
         
         if (-not $isSystem) {
-            # EJECUCION DIRECTA (como usuario)
-            Write-Verbose "Ejecutando HTA directamente en la sesión actual del usuario"
-            
-            # Ejecutar HTA en segundo plano (sin esperar)
-            $process = Start-Process -FilePath "mshta.exe" -ArgumentList "`"$htaPath`"" -PassThru -WindowStyle Normal
-            
-            Write-Verbose "Ventana de progreso iniciada con PID: $($process.Id)"
-            
-            # Aplicar SetWindowPos para mantener siempre en primer plano
-            try {
-                # Definir la función SetWindowPos de user32.dll si no existe
-                if (-not ([System.Management.Automation.PSTypeName]'Win32Functions.Win32SetWindowPos').Type) {
-                    $code = @'
-[DllImport("user32.dll")]
-public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
-'@
-                    Add-Type -MemberDefinition $code -Name "Win32SetWindowPos" -Namespace "Win32Functions" | Out-Null
-                }
-                
-                # Esperar a que la ventana se cree
-                Start-Sleep -Milliseconds 500
-                
-                # Obtener el handle de la ventana
-                $mainWindowHandle = $process.MainWindowHandle
-                if ($mainWindowHandle -eq [IntPtr]::Zero) {
-                    $process.Refresh()
-                    $mainWindowHandle = $process.MainWindowHandle
-                }
-                
-                if ($mainWindowHandle -ne [IntPtr]::Zero) {
-                    # Aplicar HWND_TOPMOST
-                    [Win32Functions.Win32SetWindowPos]::SetWindowPos($mainWindowHandle, [IntPtr](-1), 0, 0, 0, 0, 0x0001 -bor 0x0002) | Out-Null
-                    Write-Verbose "SetWindowPos aplicado a ventana de progreso"
-                }
-            }
-            catch {
-                Write-Verbose "Error al aplicar SetWindowPos: $_"
-            }
+            # Usuario normal
+            Write-Verbose "Ejecutando en sesión de usuario"
+            $process = Start-Process -FilePath "powershell.exe" `
+                -ArgumentList "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$scriptPath`"" `
+                -PassThru -WindowStyle Hidden
+            Write-Verbose "PID: $($process.Id)"
         }
         else {
-            # EJECUCION COMO SYSTEM - Crear tarea temporal para mostrar en sesión de usuario
-            Write-Verbose "Ejecutando como SYSTEM, creando tarea temporal para mostrar en sesión de usuario"
-            
-            # Obtener sesiones de usuario activas
+            # SYSTEM - usar tarea programada
+            Write-Verbose "Ejecutando como SYSTEM"
             $sessions = query user 2>$null | Select-Object -Skip 1
             
             if (-not $sessions) {
-                Write-Warning "No se encontraron sesiones de usuario activas. No se puede mostrar la ventana."
+                Write-Warning "No hay sesiones activas"
                 return $null
             }
             
-            # Procesar primera sesión activa
             foreach ($session in $sessions) {
-                if ([string]::IsNullOrWhiteSpace($session)) {
-                    continue
-                }
+                if ([string]::IsNullOrWhiteSpace($session)) { continue }
                 
-                # Extraer información de la sesión
                 $sessionInfo = $session -split '\s+' | Where-Object { $_ -ne '' }
-                
-                # Obtener nombre de usuario y ID de sesión
                 $sessionUser = $sessionInfo[0]
                 $sessionId = $null
                 
@@ -392,58 +294,46 @@ public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int 
                 }
                 
                 if ($sessionId) {
-                    Write-Verbose "Creando tarea para usuario: $sessionUser (Sesión ID: $sessionId)"
+                    Write-Verbose "Tarea para: $sessionUser (ID: $sessionId)"
                     
-                    # Crear nombre único para la tarea temporal
                     $taskName = "InstallProgress_$(Get-Random)"
-                    $taskPath = "\Temp\"
-                    
-                    # Crear acción que ejecuta el HTA
-                    $action = New-ScheduledTaskAction -Execute "mshta.exe" -Argument "`"$htaPath`""
-                    
-                    # Trigger inmediato
+                    $action = New-ScheduledTaskAction -Execute "powershell.exe" `
+                        -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$scriptPath`""
                     $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddSeconds(2)
-                    
-                    # Principal: Usuario específico, sesión interactiva
                     $principal = New-ScheduledTaskPrincipal -UserId $sessionUser -LogonType Interactive
+                    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
                     
-                    # Configuración
-                    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+                    Register-ScheduledTask -TaskName $taskName -TaskPath "\Temp\" -Action $action `
+                        -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+                    Start-ScheduledTask -TaskName $taskName -TaskPath "\Temp\"
                     
-                    # Registrar tarea
-                    Register-ScheduledTask -TaskName $taskName -TaskPath $taskPath -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+                    Write-Verbose "Tarea creada: \Temp\$taskName"
+                    Start-Sleep -Milliseconds 2000
                     
-                    # Iniciar tarea inmediatamente
-                    Start-ScheduledTask -TaskName $taskName -TaskPath $taskPath
-                    
-                    Write-Verbose "Tarea temporal creada y ejecutada: $taskPath$taskName"
-                    
-                    # Esperar un momento para que la tarea inicie
-                    Start-Sleep -Milliseconds 1000
-                    
-                    # Intentar obtener el proceso mshta.exe que se creó
-                    $process = Get-Process -Name "mshta" -ErrorAction SilentlyContinue | 
-                    Where-Object { $_.MainWindowTitle -like "*Instalación en Curso*" } | 
-                    Select-Object -First 1
-                    
-                    if ($process) {
-                        Write-Verbose "Proceso mshta encontrado con PID: $($process.Id)"
+                    # Buscar proceso
+                    for ($i = 0; $i -lt 10; $i++) {
+                        $process = Get-Process -Name "powershell" -ErrorAction SilentlyContinue | 
+                        Where-Object { $_.CommandLine -like "*$scriptPath*" } | 
+                        Select-Object -First 1
+                        if ($process) { break }
+                        Start-Sleep -Milliseconds 500
                     }
                     
+                    if ($process) { Write-Verbose "Proceso encontrado: $($process.Id)" }
                     break
                 }
             }
         }
         
         return @{
-            Process  = $process
-            HtaPath  = $htaPath
-            TaskName = $taskName
-            IsSystem = $isSystem
+            Process    = $process
+            ScriptPath = $scriptPath
+            TaskName   = $taskName
+            IsSystem   = $isSystem
         }
     }
     catch {
-        Write-Error "Error al mostrar progreso de instalación: $_"
+        Write-Error "Error: $_"
         return $null
     }
 }
@@ -453,39 +343,40 @@ public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int 
 function Close-InstallationProgress {
     <#
     .SYNOPSIS
-        Cierra la ventana de progreso de instalación.
-    
-    .PARAMETER ProgressInfo
-        Objeto devuelto por Show-InstallationProgress.
+        Cierra la ventana de progreso.
     #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
-        $ProgressInfo
+        [hashtable]$ProgressInfo
     )
     
     try {
-        if ($ProgressInfo -and $ProgressInfo.Process) {
-            # Cerrar el proceso directamente
-            if (-not $ProgressInfo.Process.HasExited) {
-                Write-Verbose "Cerrando ventana de progreso (PID: $($ProgressInfo.Process.Id))"
-                Stop-Process -Id $ProgressInfo.Process.Id -Force -ErrorAction SilentlyContinue
-            }
-            
-            # Limpiar archivo HTA temporal
-            if ($ProgressInfo.HtaPath -and (Test-Path $ProgressInfo.HtaPath)) {
-                Remove-Item $ProgressInfo.HtaPath -Force -ErrorAction SilentlyContinue
-            }
-            
-            # Eliminar tarea temporal si existe
-            if ($ProgressInfo.TaskName) {
-                Write-Verbose "Eliminando tarea temporal: $($ProgressInfo.TaskName)"
-                Unregister-ScheduledTask -TaskName $ProgressInfo.TaskName -TaskPath "\Temp\" -Confirm:$false -ErrorAction SilentlyContinue
-            }
+        Write-Verbose "Cerrando ventana..."
+        
+        # Cerrar proceso
+        if ($ProgressInfo.Process) {
+            Write-Verbose "Deteniendo PID: $($ProgressInfo.Process.Id)"
+            Stop-Process -Id $ProgressInfo.Process.Id -Force -ErrorAction SilentlyContinue
         }
+        
+        # Limpiar script
+        if ($ProgressInfo.ScriptPath -and (Test-Path $ProgressInfo.ScriptPath)) {
+            Write-Verbose "Eliminando script: $($ProgressInfo.ScriptPath)"
+            Remove-Item $ProgressInfo.ScriptPath -Force -ErrorAction SilentlyContinue
+        }
+        
+        # Limpiar tarea
+        if ($ProgressInfo.TaskName) {
+            Write-Verbose "Eliminando tarea: $($ProgressInfo.TaskName)"
+            Unregister-ScheduledTask -TaskName $ProgressInfo.TaskName -TaskPath "\Temp\" `
+                -Confirm:$false -ErrorAction SilentlyContinue
+        }
+        
+        Write-Verbose "Ventana cerrada"
     }
     catch {
-        Write-Warning "Error al cerrar ventana de progreso: $_"
+        Write-Error "Error al cerrar: $_"
     }
 }
 
