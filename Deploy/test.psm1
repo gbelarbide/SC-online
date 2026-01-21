@@ -21,7 +21,7 @@
 Function Test-Installed {
     <#
     .SYNOPSIS
-        Verifica Office instalado y prerequisitos
+        Verifica si existe el archivo de test
     #>
     
     [CmdletBinding()]
@@ -29,27 +29,9 @@ Function Test-Installed {
     
     Write-Host "`n=== VERIFICACION DE INSTALACION ===" -ForegroundColor Cyan
     
-    # Verificar Office instalado
-    $officeInstalled = $false
-    $officeArch = $null
-    $officeVersion = $null
-    
-    $regPaths = @(
-        "HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration",
-        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Office\ClickToRun\Configuration"
-    )
-    
-    foreach ($regPath in $regPaths) {
-        if (Test-Path -Path $regPath) {
-            $config = Get-ItemProperty -Path $regPath -ErrorAction SilentlyContinue
-            if ($config -and $config.VersionToReport) {
-                $officeInstalled = $true
-                $officeVersion = $config.VersionToReport
-                $officeArch = if ($config.Platform -eq "x64") { "64-bit" } else { "32-bit" }
-                break
-            }
-        }
-    }
+    # Verificar si existe el archivo de test
+    $testFile = "C:\temp\test.txt"
+    $isInstalled = Test-Path -Path $testFile
     
     # Verificar permisos de administrador
     $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
@@ -58,25 +40,20 @@ Function Test-Installed {
     # Verificar espacio en disco
     $drive = Get-PSDrive -Name C -ErrorAction SilentlyContinue
     $freeSpaceGB = if ($drive) { [math]::Round($drive.Free / 1GB, 2) } else { 0 }
-    $hasDiskSpace = $freeSpaceGB -ge 10
+    $hasDiskSpace = $freeSpaceGB -ge 1
     
     # Mostrar resultados
-    Write-Host "`nEstado de Office:" -ForegroundColor Yellow
-    Write-Host "  Instalado: $officeInstalled" -ForegroundColor $(if ($officeInstalled) { "Green" } else { "Red" })
-    if ($officeInstalled) {
-        Write-Host "  Arquitectura: $officeArch" -ForegroundColor $(if ($officeArch -eq "64-bit") { "Green" } else { "Yellow" })
-        Write-Host "  Version: $officeVersion" -ForegroundColor Cyan
-    }
+    Write-Host "`nEstado de instalacion:" -ForegroundColor Yellow
+    Write-Host "  Archivo test: $testFile" -ForegroundColor Cyan
+    Write-Host "  Instalado: $isInstalled" -ForegroundColor $(if ($isInstalled) { "Green" } else { "Red" })
     
     Write-Host "`nPrerequisitos:" -ForegroundColor Yellow
     Write-Host "  Admin: $hasAdmin" -ForegroundColor $(if ($hasAdmin) { "Green" } else { "Red" })
     Write-Host "  Espacio: $freeSpaceGB GB" -ForegroundColor $(if ($hasDiskSpace) { "Green" } else { "Red" })
     
     return [PSCustomObject]@{
-        IsInstalled    = $officeInstalled
-        Architecture   = $officeArch
-        Version        = $officeVersion
-        NeedsMigration = $officeInstalled -and $officeArch -eq "32-bit"
+        IsInstalled    = $isInstalled
+        TestFile       = $testFile
         HasAdminRights = $hasAdmin
         HasDiskSpace   = $hasDiskSpace
         CanProceed     = $hasAdmin -and $hasDiskSpace
@@ -140,14 +117,13 @@ Function Start-Preinstall {
 Function Start-Install {
     <#
     .SYNOPSIS
-        Simula instalacion
+        Simula instalacion creando el archivo test.txt
     #>
     
     [CmdletBinding()]
     param(
         [string]$SetupExePath,
-        [string]$ConfigXmlPath,
-        [bool]$NeedsMigration = $false
+        [string]$ConfigXmlPath
     )
     
     Write-Host "`n=== INSTALACION ===" -ForegroundColor Cyan
@@ -157,18 +133,38 @@ Function Start-Install {
         throw "No se encontro el archivo de configuracion"
     }
     
-    $tipo = if ($NeedsMigration) { "MIGRACION 32-bit -> 64-bit" } else { "INSTALACION NUEVA" }
-    Write-Host "`nTipo: $tipo" -ForegroundColor Yellow
-    Write-Host "Comando: $SetupExePath /configure `"$ConfigXmlPath`"" -ForegroundColor Cyan
+    Write-Host "`nComando: $SetupExePath /configure `"$ConfigXmlPath`"" -ForegroundColor Cyan
     
-    Write-Host "`n[SIMULADO] Instalacion completada" -ForegroundColor Magenta
-    Start-Sleep -Seconds 2
+    Write-Host "`n[SIMULADO] Iniciando instalacion..." -ForegroundColor Magenta
+    
+    # Simular instalacion de 30 segundos con progreso
+    $totalSeconds = 30
+    $interval = 5
+    for ($i = $interval; $i -le $totalSeconds; $i += $interval) {
+        Start-Sleep -Seconds $interval
+        $percentage = [math]::Round(($i / $totalSeconds) * 100)
+        Write-Host "[SIMULADO] Progreso: $percentage% ($i/$totalSeconds segundos)" -ForegroundColor Magenta
+    }
+    
+    # Crear el archivo de test
+    $testFile = "C:\temp\test.txt"
+    $testDir = Split-Path -Path $testFile -Parent
+    
+    if (-not (Test-Path -Path $testDir)) {
+        New-Item -Path $testDir -ItemType Directory -Force | Out-Null
+    }
+    
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    "Instalacion completada: $timestamp" | Out-File -FilePath $testFile -Encoding UTF8 -Force
+    
+    Write-Host "[SIMULADO] Instalacion completada" -ForegroundColor Magenta
+    Write-Host "[OK] Archivo creado: $testFile" -ForegroundColor Green
     
     return [PSCustomObject]@{
-        Success      = $true
-        ExitCode     = 0
-        Duration     = New-TimeSpan -Minutes 8 -Seconds 34
-        WasMigration = $NeedsMigration
+        Success  = $true
+        ExitCode = 0
+        Duration = New-TimeSpan -Seconds $totalSeconds
+        TestFile = $testFile
     }
 }
 
@@ -189,6 +185,14 @@ Function Start-PostInstall {
     # Verificar estado actual
     $verification = Test-Installed
     
+    if ($verification.IsInstalled) {
+        Write-Host "[OK] Instalacion verificada correctamente" -ForegroundColor Green
+        Write-Host "Archivo: $($verification.TestFile)" -ForegroundColor Cyan
+    }
+    else {
+        Write-Warning "No se pudo verificar la instalacion"
+    }
+    
     # Limpiar archivos
     if (-not $KeepFiles -and (Test-Path -Path $InstallPath)) {
         try {
@@ -201,9 +205,8 @@ Function Start-PostInstall {
     }
     
     return [PSCustomObject]@{
-        VerificationSuccess   = $true
-        InstalledVersion      = if ($verification.IsInstalled) { $verification.Version } else { "No instalado" }
-        InstalledArchitecture = if ($verification.IsInstalled) { $verification.Architecture } else { "N/A" }
+        VerificationSuccess = $verification.IsInstalled
+        TestFile            = $verification.TestFile
     }
 }
 
@@ -228,20 +231,10 @@ Function Start-Deploy {
     try {
         # FASE 1: Verificacion
         Write-Host "`n--- FASE 1: VERIFICACION ---" -ForegroundColor Cyan
-        $testResult = Test-Installed
+        $isInstalled = Test-Installed
         
-        if (-not $testResult.CanProceed) {
-            if (-not $testResult.HasAdminRights) {
-                throw "Se requieren permisos de administrador"
-            }
-            if (-not $testResult.HasDiskSpace) {
-                throw "Espacio en disco insuficiente"
-            }
-        }
-        
-        if ($testResult.IsInstalled -and $testResult.Architecture -eq "64-bit" -and -not $Force) {
-            Write-Host "`n[OK] Office 64-bit ya esta instalado" -ForegroundColor Green
-            Write-Host "Version: $($testResult.Version)" -ForegroundColor Cyan
+        if ($isInstalled -and -not $Force) {
+            Write-Host "`n[OK] Ya esta instalado (archivo test.txt existe)" -ForegroundColor Green
             Write-Host "Use -Force para simular reinstalacion" -ForegroundColor Yellow
             return [PSCustomObject]@{ Success = $true; AlreadyInstalled = $true }
         }
@@ -257,8 +250,7 @@ Function Start-Deploy {
         # FASE 3: Instalacion
         Write-Host "`n--- FASE 3: INSTALACION ---" -ForegroundColor Cyan
         $install = Start-Install -SetupExePath $preinstall.SetupExePath `
-            -ConfigXmlPath $preinstall.ConfigXmlPath `
-            -NeedsMigration $testResult.NeedsMigration
+            -ConfigXmlPath $preinstall.ConfigXmlPath
         
         if (-not $install.Success) {
             throw "Error en instalacion"
@@ -273,14 +265,12 @@ Function Start-Deploy {
         Write-Host "  [OK] SIMULACION COMPLETADA EXITOSAMENTE" -ForegroundColor Green
         Write-Host "================================================================" -ForegroundColor Green
         Write-Host "`nResumen:" -ForegroundColor Cyan
-        Write-Host "  Version actual: $($postInstall.InstalledVersion)" -ForegroundColor Green
-        Write-Host "  Arquitectura: $($postInstall.InstalledArchitecture)" -ForegroundColor Green
+        Write-Host "  Archivo creado: $($install.TestFile)" -ForegroundColor Green
         Write-Host "  Duracion simulada: $($install.Duration.ToString('mm\:ss'))" -ForegroundColor Cyan
-        Write-Host "  Tipo: $(if ($testResult.NeedsMigration) { 'Migracion 32->64' } else { 'Instalacion nueva' })" -ForegroundColor Cyan
         
         return [PSCustomObject]@{
             Success           = $true
-            TestResult        = $testResult
+            IsInstalled       = $isInstalled
             PreinstallResult  = $preinstall
             InstallResult     = $install
             PostInstallResult = $postInstall
