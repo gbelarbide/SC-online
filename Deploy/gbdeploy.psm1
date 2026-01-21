@@ -110,6 +110,9 @@ function Show-InstallationProgress {
         Esta función crea una ventana HTA que muestra un mensaje de instalación con animación
         de puntos (...) y permanece siempre en primer plano. La ventana se cierra
         usando Stop-Process cuando la instalación termina.
+        
+        Funciona tanto en contexto de usuario como de SYSTEM, mostrando la ventana
+        en la sesión del usuario activo cuando es necesario.
     
     .PARAMETER AppName
         Nombre de la aplicación que se está instalando.
@@ -120,7 +123,7 @@ function Show-InstallationProgress {
         Close-InstallationProgress -ProgressInfo $progressWindow
     
     .OUTPUTS
-        Devuelve un objeto con el proceso de mshta.exe y la ruta del HTA.
+        Devuelve un objeto con el proceso de mshta.exe, la ruta del HTA y el nombre de la tarea (si aplica).
     #>
     [CmdletBinding()]
     param(
@@ -129,11 +132,23 @@ function Show-InstallationProgress {
     )
     
     try {
+        # Detectar si estamos ejecutando como SYSTEM
+        $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+        $isSystem = $currentUser.IsSystem
+        
+        Write-Verbose "Ejecutando como: $($currentUser.Name), IsSystem: $isSystem"
+        
         # Escapar caracteres especiales para HTML
         $escapedAppName = $AppName -replace '<', '&lt;' -replace '>', '&gt;' -replace '"', '&quot;'
         
+        # Determinar carpeta temporal
+        $tempFolder = if ($isSystem) { "C:\ProgramData\Temp" } else { $env:TEMP }
+        if (-not (Test-Path $tempFolder)) {
+            New-Item -Path $tempFolder -ItemType Directory -Force | Out-Null
+        }
+        
         # Crear contenido HTA con animación
-        $htaPath = "$env:TEMP\InstallProgress_$(Get-Random).hta"
+        $htaPath = "$tempFolder\InstallProgress_$(Get-Random).hta"
         $htaContent = @"
 <html>
 <head>
@@ -279,45 +294,130 @@ function Show-InstallationProgress {
         # Guardar HTA
         $htaContent | Out-File -FilePath $htaPath -Encoding UTF8 -Force
         
-        # Ejecutar HTA en segundo plano (sin esperar)
-        $process = Start-Process -FilePath "mshta.exe" -ArgumentList "`"$htaPath`"" -PassThru -WindowStyle Normal
+        $process = $null
+        $taskName = $null
         
-        Write-Verbose "Ventana de progreso iniciada con PID: $($process.Id)"
-        
-        # Aplicar SetWindowPos para mantener siempre en primer plano
-        try {
-            # Definir la función SetWindowPos de user32.dll si no existe
-            if (-not ([System.Management.Automation.PSTypeName]'Win32Functions.Win32SetWindowPos').Type) {
-                $code = @'
+        if (-not $isSystem) {
+            # EJECUCION DIRECTA (como usuario)
+            Write-Verbose "Ejecutando HTA directamente en la sesión actual del usuario"
+            
+            # Ejecutar HTA en segundo plano (sin esperar)
+            $process = Start-Process -FilePath "mshta.exe" -ArgumentList "`"$htaPath`"" -PassThru -WindowStyle Normal
+            
+            Write-Verbose "Ventana de progreso iniciada con PID: $($process.Id)"
+            
+            # Aplicar SetWindowPos para mantener siempre en primer plano
+            try {
+                # Definir la función SetWindowPos de user32.dll si no existe
+                if (-not ([System.Management.Automation.PSTypeName]'Win32Functions.Win32SetWindowPos').Type) {
+                    $code = @'
 [DllImport("user32.dll")]
 public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 '@
-                Add-Type -MemberDefinition $code -Name "Win32SetWindowPos" -Namespace "Win32Functions" | Out-Null
-            }
-            
-            # Esperar a que la ventana se cree
-            Start-Sleep -Milliseconds 500
-            
-            # Obtener el handle de la ventana
-            $mainWindowHandle = $process.MainWindowHandle
-            if ($mainWindowHandle -eq [IntPtr]::Zero) {
-                $process.Refresh()
+                    Add-Type -MemberDefinition $code -Name "Win32SetWindowPos" -Namespace "Win32Functions" | Out-Null
+                }
+                
+                # Esperar a que la ventana se cree
+                Start-Sleep -Milliseconds 500
+                
+                # Obtener el handle de la ventana
                 $mainWindowHandle = $process.MainWindowHandle
+                if ($mainWindowHandle -eq [IntPtr]::Zero) {
+                    $process.Refresh()
+                    $mainWindowHandle = $process.MainWindowHandle
+                }
+                
+                if ($mainWindowHandle -ne [IntPtr]::Zero) {
+                    # Aplicar HWND_TOPMOST
+                    [Win32Functions.Win32SetWindowPos]::SetWindowPos($mainWindowHandle, [IntPtr](-1), 0, 0, 0, 0, 0x0001 -bor 0x0002) | Out-Null
+                    Write-Verbose "SetWindowPos aplicado a ventana de progreso"
+                }
             }
-            
-            if ($mainWindowHandle -ne [IntPtr]::Zero) {
-                # Aplicar HWND_TOPMOST
-                [Win32Functions.Win32SetWindowPos]::SetWindowPos($mainWindowHandle, [IntPtr](-1), 0, 0, 0, 0, 0x0001 -bor 0x0002) | Out-Null
-                Write-Verbose "SetWindowPos aplicado a ventana de progreso"
+            catch {
+                Write-Verbose "Error al aplicar SetWindowPos: $_"
             }
         }
-        catch {
-            Write-Verbose "Error al aplicar SetWindowPos: $_"
+        else {
+            # EJECUCION COMO SYSTEM - Crear tarea temporal para mostrar en sesión de usuario
+            Write-Verbose "Ejecutando como SYSTEM, creando tarea temporal para mostrar en sesión de usuario"
+            
+            # Obtener sesiones de usuario activas
+            $sessions = query user 2>$null | Select-Object -Skip 1
+            
+            if (-not $sessions) {
+                Write-Warning "No se encontraron sesiones de usuario activas. No se puede mostrar la ventana."
+                return $null
+            }
+            
+            # Procesar primera sesión activa
+            foreach ($session in $sessions) {
+                if ([string]::IsNullOrWhiteSpace($session)) {
+                    continue
+                }
+                
+                # Extraer información de la sesión
+                $sessionInfo = $session -split '\s+' | Where-Object { $_ -ne '' }
+                
+                # Obtener nombre de usuario y ID de sesión
+                $sessionUser = $sessionInfo[0]
+                $sessionId = $null
+                
+                foreach ($item in $sessionInfo) {
+                    if ($item -match '^\d+$') {
+                        $sessionId = $item
+                        break
+                    }
+                }
+                
+                if ($sessionId) {
+                    Write-Verbose "Creando tarea para usuario: $sessionUser (Sesión ID: $sessionId)"
+                    
+                    # Crear nombre único para la tarea temporal
+                    $taskName = "InstallProgress_$(Get-Random)"
+                    $taskPath = "\Temp\"
+                    
+                    # Crear acción que ejecuta el HTA
+                    $action = New-ScheduledTaskAction -Execute "mshta.exe" -Argument "`"$htaPath`""
+                    
+                    # Trigger inmediato
+                    $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddSeconds(2)
+                    
+                    # Principal: Usuario específico, sesión interactiva
+                    $principal = New-ScheduledTaskPrincipal -UserId $sessionUser -LogonType Interactive
+                    
+                    # Configuración
+                    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+                    
+                    # Registrar tarea
+                    Register-ScheduledTask -TaskName $taskName -TaskPath $taskPath -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+                    
+                    # Iniciar tarea inmediatamente
+                    Start-ScheduledTask -TaskName $taskName -TaskPath $taskPath
+                    
+                    Write-Verbose "Tarea temporal creada y ejecutada: $taskPath$taskName"
+                    
+                    # Esperar un momento para que la tarea inicie
+                    Start-Sleep -Milliseconds 1000
+                    
+                    # Intentar obtener el proceso mshta.exe que se creó
+                    $process = Get-Process -Name "mshta" -ErrorAction SilentlyContinue | 
+                    Where-Object { $_.MainWindowTitle -like "*Instalación en Curso*" } | 
+                    Select-Object -First 1
+                    
+                    if ($process) {
+                        Write-Verbose "Proceso mshta encontrado con PID: $($process.Id)"
+                    }
+                    
+                    break
+                }
+            }
         }
         
         return @{
-            Process = $process
-            HtaPath = $htaPath
+            Process  = $process
+            HtaPath  = $htaPath
+            TaskName = $taskName
+            IsSystem = $isSystem
         }
     }
     catch {
@@ -325,6 +425,8 @@ public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int 
         return $null
     }
 }
+
+
 
 function Close-InstallationProgress {
     <#
@@ -351,6 +453,12 @@ function Close-InstallationProgress {
             # Limpiar archivo HTA temporal
             if ($ProgressInfo.HtaPath -and (Test-Path $ProgressInfo.HtaPath)) {
                 Remove-Item $ProgressInfo.HtaPath -Force -ErrorAction SilentlyContinue
+            }
+            
+            # Eliminar tarea temporal si existe
+            if ($ProgressInfo.TaskName) {
+                Write-Verbose "Eliminando tarea temporal: $($ProgressInfo.TaskName)"
+                Unregister-ScheduledTask -TaskName $ProgressInfo.TaskName -TaskPath "\Temp\" -Confirm:$false -ErrorAction SilentlyContinue
             }
         }
     }
