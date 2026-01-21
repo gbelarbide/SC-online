@@ -358,7 +358,7 @@ Function Repair-OfficeShortcuts {
         Repara accesos directos de Office que apunten a rutas incorrectas
     
     .DESCRIPTION
-        Busca accesos directos de Office en la barra de tareas y menu inicio,
+        Busca accesos directos de Office en la barra de tareas y menu inicio de todos los usuarios,
         y actualiza las rutas para que apunten a la nueva ubicacion de 64-bit
     
     .OUTPUTS
@@ -366,7 +366,7 @@ Function Repair-OfficeShortcuts {
     
     .EXAMPLE
         $repair = Repair-OfficeShortcuts
-        Write-Host "Accesos directos reparados: $($repair.RepairedCount)"
+        Write-Host "Accesos directos reparados: $($repair.ShortcutsRepaired)"
     #>
     
     [CmdletBinding()]
@@ -374,6 +374,7 @@ Function Repair-OfficeShortcuts {
     param()
     
     $result = [PSCustomObject]@{
+        UsersProcessed    = 0
         ShortcutsFound    = 0
         ShortcutsRepaired = 0
         ShortcutsFailed   = 0
@@ -381,16 +382,32 @@ Function Repair-OfficeShortcuts {
     }
     
     try {
-        Write-Host "`nReparando accesos directos de Office..." -ForegroundColor Yellow
+        Write-Host "`nReparando accesos directos de Office para todos los usuarios..." -ForegroundColor Yellow
         
-        # Crear objeto WScript.Shell para manipular accesos directos
-        $shell = New-Object -ComObject WScript.Shell
+        # Obtener la ruta correcta de Office 64-bit desde el registro
+        $office64Path = $null
+        $regPath = "HKLM:\SOFTWARE\Microsoft\Office\16.0\Outlook\InstallRoot"
         
-        # Rutas donde buscar accesos directos
-        $shortcutPaths = @(
-            "$env:AppData\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar",
-            "$env:AppData\Microsoft\Windows\Start Menu\Programs"
-        )
+        if (Test-Path -Path $regPath) {
+            $installRoot = Get-ItemProperty -Path $regPath -ErrorAction SilentlyContinue
+            if ($installRoot -and $installRoot.Path) {
+                $office64Path = $installRoot.Path.TrimEnd('\')
+                Write-Verbose "Ruta de Office 64-bit obtenida del registro: $office64Path"
+            }
+        }
+        
+        if (-not $office64Path) {
+            Write-Warning "No se pudo determinar la ruta de Office 64-bit desde el registro"
+            Write-Warning "Ruta esperada: $regPath"
+            return $result
+        }
+        
+        if (-not (Test-Path -Path $office64Path)) {
+            Write-Warning "La ruta de Office 64-bit no existe: $office64Path"
+            return $result
+        }
+        
+        Write-Host "Ruta de Office 64-bit: $office64Path" -ForegroundColor Cyan
         
         # Aplicaciones de Office a buscar
         $officeApps = @(
@@ -403,109 +420,132 @@ Function Repair-OfficeShortcuts {
             @{Name = "OneNote"; Exe = "ONENOTE.EXE" }
         )
         
-        # Obtener la ruta correcta de Office 64-bit
-        $office64Path = $null
-        $regPath = "HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration"
-        if (Test-Path -Path $regPath) {
-            $config = Get-ItemProperty -Path $regPath -ErrorAction SilentlyContinue
-            if ($config -and $config.InstallationPath) {
-                $office64Path = Join-Path -Path $config.InstallationPath -ChildPath "Office16"
-            }
+        # Obtener todos los perfiles de usuario
+        $userProfiles = Get-ChildItem -Path "C:\Users" -Directory -ErrorAction SilentlyContinue | Where-Object {
+            # Excluir perfiles del sistema
+            $_.Name -notin @('Public', 'Default', 'Default User', 'All Users') -and
+            # Verificar que tenga carpeta AppData
+            (Test-Path -Path (Join-Path -Path $_.FullName -ChildPath 'AppData'))
         }
         
-        if (-not $office64Path -or -not (Test-Path -Path $office64Path)) {
-            Write-Warning "No se pudo determinar la ruta de Office 64-bit"
+        if ($userProfiles.Count -eq 0) {
+            Write-Warning "No se encontraron perfiles de usuario validos"
             return $result
         }
         
-        Write-Verbose "Ruta de Office 64-bit: $office64Path"
+        Write-Host "Perfiles de usuario encontrados: $($userProfiles.Count)" -ForegroundColor Cyan
         
-        # Buscar y reparar accesos directos
-        foreach ($searchPath in $shortcutPaths) {
-            if (-not (Test-Path -Path $searchPath)) {
-                Write-Verbose "Ruta no encontrada: $searchPath"
-                continue
-            }
+        # Crear objeto WScript.Shell para manipular accesos directos
+        $shell = New-Object -ComObject WScript.Shell
+        
+        # Procesar cada perfil de usuario
+        foreach ($userProfile in $userProfiles) {
+            $userName = $userProfile.Name
+            Write-Verbose "`nProcesando usuario: $userName"
             
-            Write-Verbose "Buscando en: $searchPath"
+            # Rutas donde buscar accesos directos para este usuario
+            $shortcutPaths = @(
+                (Join-Path -Path $userProfile.FullName -ChildPath "AppData\Roaming\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar"),
+                (Join-Path -Path $userProfile.FullName -ChildPath "AppData\Roaming\Microsoft\Windows\Start Menu\Programs")
+            )
             
-            # Buscar todos los archivos .lnk recursivamente
-            $shortcuts = Get-ChildItem -Path $searchPath -Filter "*.lnk" -Recurse -ErrorAction SilentlyContinue
+            $userHasShortcuts = $false
             
-            foreach ($shortcut in $shortcuts) {
-                try {
-                    $lnk = $shell.CreateShortcut($shortcut.FullName)
-                    $targetPath = $lnk.TargetPath
-                    
-                    # Verificar si es un acceso directo de Office
-                    $isOfficeShortcut = $false
-                    $appInfo = $null
-                    
-                    foreach ($app in $officeApps) {
-                        if ($targetPath -like "*\$($app.Exe)") {
-                            $isOfficeShortcut = $true
-                            $appInfo = $app
-                            break
+            # Buscar y reparar accesos directos
+            foreach ($searchPath in $shortcutPaths) {
+                if (-not (Test-Path -Path $searchPath)) {
+                    Write-Verbose "  Ruta no encontrada: $searchPath"
+                    continue
+                }
+                
+                Write-Verbose "  Buscando en: $searchPath"
+                
+                # Buscar todos los archivos .lnk recursivamente
+                $shortcuts = Get-ChildItem -Path $searchPath -Filter "*.lnk" -Recurse -ErrorAction SilentlyContinue
+                
+                foreach ($shortcut in $shortcuts) {
+                    try {
+                        $lnk = $shell.CreateShortcut($shortcut.FullName)
+                        $targetPath = $lnk.TargetPath
+                        
+                        # Verificar si es un acceso directo de Office
+                        $isOfficeShortcut = $false
+                        $appInfo = $null
+                        
+                        foreach ($app in $officeApps) {
+                            if ($targetPath -like "*\$($app.Exe)") {
+                                $isOfficeShortcut = $true
+                                $appInfo = $app
+                                break
+                            }
                         }
-                    }
-                    
-                    if ($isOfficeShortcut) {
-                        $result.ShortcutsFound++
                         
-                        # Construir la nueva ruta correcta
-                        $newTargetPath = Join-Path -Path $office64Path -ChildPath $appInfo.Exe
-                        
-                        # Verificar si la ruta actual es incorrecta
-                        if ($targetPath -ne $newTargetPath) {
-                            # Verificar que el nuevo ejecutable existe
-                            if (Test-Path -Path $newTargetPath) {
-                                Write-Verbose "Reparando: $($shortcut.Name)"
-                                Write-Verbose "  Antigua: $targetPath"
-                                Write-Verbose "  Nueva: $newTargetPath"
-                                
-                                # Actualizar el acceso directo
-                                $lnk.TargetPath = $newTargetPath
-                                $lnk.Save()
-                                
-                                $result.ShortcutsRepaired++
-                                $result.Details += [PSCustomObject]@{
-                                    Name     = $shortcut.Name
-                                    Location = $shortcut.DirectoryName
-                                    OldPath  = $targetPath
-                                    NewPath  = $newTargetPath
-                                    Status   = "Reparado"
+                        if ($isOfficeShortcut) {
+                            $result.ShortcutsFound++
+                            $userHasShortcuts = $true
+                            
+                            # Construir la nueva ruta correcta
+                            $newTargetPath = Join-Path -Path $office64Path -ChildPath $appInfo.Exe
+                            
+                            # Verificar si la ruta actual es incorrecta
+                            if ($targetPath -ne $newTargetPath) {
+                                # Verificar que el nuevo ejecutable existe
+                                if (Test-Path -Path $newTargetPath) {
+                                    Write-Verbose "    Reparando: $($shortcut.Name)"
+                                    Write-Verbose "      Antigua: $targetPath"
+                                    Write-Verbose "      Nueva: $newTargetPath"
+                                    
+                                    # Actualizar el acceso directo
+                                    $lnk.TargetPath = $newTargetPath
+                                    $lnk.Save()
+                                    
+                                    $result.ShortcutsRepaired++
+                                    $result.Details += [PSCustomObject]@{
+                                        User     = $userName
+                                        Name     = $shortcut.Name
+                                        Location = $shortcut.DirectoryName
+                                        OldPath  = $targetPath
+                                        NewPath  = $newTargetPath
+                                        Status   = "Reparado"
+                                    }
+                                    
+                                    Write-Host "  [OK] $userName\$($shortcut.Name) -> $($appInfo.Name)" -ForegroundColor Green
                                 }
-                                
-                                Write-Host "  [OK] $($shortcut.Name) -> $($appInfo.Name)" -ForegroundColor Green
+                                else {
+                                    Write-Warning "    No se encontro el ejecutable: $newTargetPath"
+                                    $result.ShortcutsFailed++
+                                    $result.Details += [PSCustomObject]@{
+                                        User     = $userName
+                                        Name     = $shortcut.Name
+                                        Location = $shortcut.DirectoryName
+                                        OldPath  = $targetPath
+                                        NewPath  = $newTargetPath
+                                        Status   = "Error: Ejecutable no encontrado"
+                                    }
+                                }
                             }
                             else {
-                                Write-Warning "No se encontro el ejecutable: $newTargetPath"
-                                $result.ShortcutsFailed++
+                                Write-Verbose "    Acceso directo ya correcto: $($shortcut.Name)"
                                 $result.Details += [PSCustomObject]@{
+                                    User     = $userName
                                     Name     = $shortcut.Name
                                     Location = $shortcut.DirectoryName
                                     OldPath  = $targetPath
-                                    NewPath  = $newTargetPath
-                                    Status   = "Error: Ejecutable no encontrado"
+                                    NewPath  = $targetPath
+                                    Status   = "Ya correcto"
                                 }
                             }
                         }
-                        else {
-                            Write-Verbose "Acceso directo ya correcto: $($shortcut.Name)"
-                            $result.Details += [PSCustomObject]@{
-                                Name     = $shortcut.Name
-                                Location = $shortcut.DirectoryName
-                                OldPath  = $targetPath
-                                NewPath  = $targetPath
-                                Status   = "Ya correcto"
-                            }
-                        }
+                    }
+                    catch {
+                        Write-Warning "    Error al procesar $($shortcut.FullName): $_"
+                        $result.ShortcutsFailed++
                     }
                 }
-                catch {
-                    Write-Warning "Error al procesar $($shortcut.FullName): $_"
-                    $result.ShortcutsFailed++
-                }
+            }
+            
+            if ($userHasShortcuts) {
+                $result.UsersProcessed++
             }
         }
         
@@ -513,16 +553,12 @@ Function Repair-OfficeShortcuts {
         [System.Runtime.Interopservices.Marshal]::ReleaseComObject($shell) | Out-Null
         
         # Resumen
-        if ($result.ShortcutsFound -eq 0) {
-            Write-Host "No se encontraron accesos directos de Office" -ForegroundColor Cyan
-        }
-        else {
-            Write-Host "`nResumen de accesos directos:" -ForegroundColor Cyan
-            Write-Host "  Encontrados: $($result.ShortcutsFound)" -ForegroundColor Cyan
-            Write-Host "  Reparados: $($result.ShortcutsRepaired)" -ForegroundColor Green
-            if ($result.ShortcutsFailed -gt 0) {
-                Write-Host "  Fallidos: $($result.ShortcutsFailed)" -ForegroundColor Yellow
-            }
+        Write-Host "`nResumen de accesos directos:" -ForegroundColor Cyan
+        Write-Host "  Usuarios procesados: $($result.UsersProcessed)" -ForegroundColor Cyan
+        Write-Host "  Accesos directos encontrados: $($result.ShortcutsFound)" -ForegroundColor Cyan
+        Write-Host "  Accesos directos reparados: $($result.ShortcutsRepaired)" -ForegroundColor Green
+        if ($result.ShortcutsFailed -gt 0) {
+            Write-Host "  Accesos directos fallidos: $($result.ShortcutsFailed)" -ForegroundColor Yellow
         }
     }
     catch {
@@ -531,6 +567,7 @@ Function Repair-OfficeShortcuts {
     
     return $result
 }
+
 
 Function Start-PostInstall {
     <#
