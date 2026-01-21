@@ -144,7 +144,21 @@ function Show-InstallationProgress {
             if (Get-Command Get-DeployCnf -ErrorAction SilentlyContinue) {
                 $cnfResult = Get-DeployCnf
                 if ($cnfResult) {
-                    $brandingMessage = $cnfResult
+                    # Intentar parsear como JSON
+                    try {
+                        $cnfObject = $cnfResult | ConvertFrom-Json
+                        if ($cnfObject.Message) {
+                            $brandingMessage = $cnfObject.Message
+                        }
+                        else {
+                            # Si no tiene propiedad Message, usar el resultado completo
+                            $brandingMessage = $cnfResult
+                        }
+                    }
+                    catch {
+                        # Si no es JSON, usar el resultado como está
+                        $brandingMessage = $cnfResult
+                    }
                 }
             }
         }
@@ -154,7 +168,7 @@ function Show-InstallationProgress {
         
         # Escapar caracteres especiales para HTML
         $escapedAppName = $AppName -replace '<', '&lt;' -replace '>', '&gt;' -replace '"', '&quot;'
-        $escapedBranding = $brandingMessage -replace '<', '&lt;' -replace '>', '&gt;' -replace '"', '&quot;'
+        $escapedBranding = $brandingMessage -replace '<', '&lt;' -replace '>', '&gt;' -replace '"', '&quot;' -replace "`r`n", '<br>' -replace "`n", '<br>'
         
         # Determinar carpeta temporal
         $tempFolder = if ($isSystem) { "C:\ProgramData\Temp" } else { $env:TEMP }
@@ -203,11 +217,12 @@ function Show-InstallationProgress {
             min-width: 450px;
         }
         .logo {
-            font-size: 32px;
-            font-weight: 700;
-            color: #000;
-            margin-bottom: 30px;
-            letter-spacing: 2px;
+            font-size: 14px;
+            font-weight: 400;
+            color: #666;
+            margin-bottom: 20px;
+            letter-spacing: 0.5px;
+            line-height: 1.4;
         }
         h1 {
             color: #000;
@@ -292,14 +307,7 @@ function Show-InstallationProgress {
     <div class="container">
         <div class="logo">$escapedBranding</div>
         <h1 id="status">INSTALANDO</h1>
-        <div class="app-name">$escapedAppName<span class="dots" id="dots"></span></div>
-        <div class="spinner"></div>
-        <div class="message">
-            Este proceso puede tardar varios minutos.
-        </div>
-        <div class="warning">
-            ⚠️ NO REINICIE ni APAGUE el equipo durante la instalación
-        </div>
+        <div class="app-name">$escapedAppName<span class="dots" id="dots"></span></div> 
     </div>
 </body>
 </html>
@@ -2056,5 +2064,5 @@ function Save-DeploymentResult {
     }
 }
 
-# Exportar las funciones
-#Export-ModuleMember -Function Show-UserMessage, Show-UserPrompt, New-GbScheduledTask, Remove-GbScheduledTask, Start-GbDeploy
+#Exportar las funciones
+#Export-ModuleMember -Function Show-UserMessage, Show-UserPrompt, New-GbScheduledTask, Remove-GbScheduledTask, Start-GbDeploy, Show-InstallationProgress
