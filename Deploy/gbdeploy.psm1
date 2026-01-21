@@ -138,8 +138,23 @@ function Show-InstallationProgress {
         
         Write-Verbose "Ejecutando como: $($currentUser.Name), IsSystem: $isSystem"
         
+        # Obtener mensaje de branding
+        $brandingMessage = "DeployCnf"  # Valor por defecto
+        try {
+            if (Get-Command Get-DeployCnf -ErrorAction SilentlyContinue) {
+                $cnfResult = Get-DeployCnf
+                if ($cnfResult) {
+                    $brandingMessage = $cnfResult
+                }
+            }
+        }
+        catch {
+            Write-Verbose "No se pudo obtener mensaje de Get-DeployCnf, usando valor por defecto"
+        }
+        
         # Escapar caracteres especiales para HTML
         $escapedAppName = $AppName -replace '<', '&lt;' -replace '>', '&gt;' -replace '"', '&quot;'
+        $escapedBranding = $brandingMessage -replace '<', '&lt;' -replace '>', '&gt;' -replace '"', '&quot;'
         
         # Determinar carpeta temporal
         $tempFolder = if ($isSystem) { "C:\ProgramData\Temp" } else { $env:TEMP }
