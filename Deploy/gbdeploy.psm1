@@ -108,38 +108,27 @@ function Show-InstallationProgress {
     
     .DESCRIPTION
         Esta función crea una ventana HTA que muestra un mensaje de instalación con animación
-        de puntos (...) y permanece siempre en primer plano. La ventana se puede cerrar
-        programáticamente escribiendo en un archivo de control.
+        de puntos (...) y permanece siempre en primer plano. La ventana se cierra
+        usando Stop-Process cuando la instalación termina.
     
     .PARAMETER AppName
         Nombre de la aplicación que se está instalando.
     
-    .PARAMETER ControlFile
-        Ruta al archivo de control que se usará para cerrar la ventana.
-        Cuando este archivo contenga "CLOSE", la ventana se cerrará.
-    
     .EXAMPLE
-        $controlFile = "$env:TEMP\install_control.txt"
-        Show-InstallationProgress -AppName "Office 64-bit" -ControlFile $controlFile
+        $progressWindow = Show-InstallationProgress -AppName "Office 64-bit"
         # ... realizar instalación ...
-        Set-Content -Path $controlFile -Value "CLOSE"
+        Close-InstallationProgress -ProgressInfo $progressWindow
     
     .OUTPUTS
-        Devuelve el proceso de mshta.exe para poder cerrarlo si es necesario.
+        Devuelve un objeto con el proceso de mshta.exe y la ruta del HTA.
     #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
-        [string]$AppName,
-        
-        [Parameter(Mandatory = $true)]
-        [string]$ControlFile
+        [string]$AppName
     )
     
     try {
-        # Crear archivo de control vacío
-        "" | Out-File -FilePath $ControlFile -Force
-        
         # Escapar caracteres especiales para HTML
         $escapedAppName = $AppName -replace '<', '&lt;' -replace '>', '&gt;' -replace '"', '&quot;'
         
@@ -243,7 +232,6 @@ function Show-InstallationProgress {
     </style>
     <script>
         var dotCount = 0;
-        var controlFile = "$($ControlFile -replace '\\', '\\')";
         
         function updateDots() {
             dotCount = (dotCount + 1) % 4;
@@ -252,32 +240,6 @@ function Show-InstallationProgress {
                 dots += '.';
             }
             document.getElementById('dots').innerHTML = dots;
-        }
-        
-        function checkControlFile() {
-            try {
-                var fso = new ActiveXObject("Scripting.FileSystemObject");
-                if (fso.FileExists(controlFile)) {
-                    var file = fso.OpenTextFile(controlFile, 1);
-                    var content = file.ReadAll();
-                    file.Close();
-                    
-                    if (content.indexOf("CLOSE") !== -1) {
-                        // Mostrar mensaje de finalización brevemente
-                        document.getElementById('status').innerHTML = 'INSTALACIÓN COMPLETADA';
-                        document.getElementById('dots').innerHTML = '';
-                        setTimeout(function() {
-                            window.close();
-                        }, 2000);
-                        return;
-                    }
-                }
-            } catch(e) {
-                // Ignorar errores de lectura
-            }
-            
-            // Continuar verificando
-            setTimeout(checkControlFile, 500);
         }
         
         window.onload = function() {
@@ -294,9 +256,6 @@ function Show-InstallationProgress {
             
             // Iniciar animación de puntos
             setInterval(updateDots, 500);
-            
-            // Iniciar verificación del archivo de control
-            checkControlFile();
         };
     </script>
 </head>
@@ -320,15 +279,45 @@ function Show-InstallationProgress {
         # Guardar HTA
         $htaContent | Out-File -FilePath $htaPath -Encoding UTF8 -Force
         
-        # Ejecutar HTA en segundo plano
+        # Ejecutar HTA en segundo plano (sin esperar)
         $process = Start-Process -FilePath "mshta.exe" -ArgumentList "`"$htaPath`"" -PassThru -WindowStyle Normal
         
         Write-Verbose "Ventana de progreso iniciada con PID: $($process.Id)"
         
+        # Aplicar SetWindowPos para mantener siempre en primer plano
+        try {
+            # Definir la función SetWindowPos de user32.dll si no existe
+            if (-not ([System.Management.Automation.PSTypeName]'Win32Functions.Win32SetWindowPos').Type) {
+                $code = @'
+[DllImport("user32.dll")]
+public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+'@
+                Add-Type -MemberDefinition $code -Name "Win32SetWindowPos" -Namespace "Win32Functions" | Out-Null
+            }
+            
+            # Esperar a que la ventana se cree
+            Start-Sleep -Milliseconds 500
+            
+            # Obtener el handle de la ventana
+            $mainWindowHandle = $process.MainWindowHandle
+            if ($mainWindowHandle -eq [IntPtr]::Zero) {
+                $process.Refresh()
+                $mainWindowHandle = $process.MainWindowHandle
+            }
+            
+            if ($mainWindowHandle -ne [IntPtr]::Zero) {
+                # Aplicar HWND_TOPMOST
+                [Win32Functions.Win32SetWindowPos]::SetWindowPos($mainWindowHandle, [IntPtr](-1), 0, 0, 0, 0, 0x0001 -bor 0x0002) | Out-Null
+                Write-Verbose "SetWindowPos aplicado a ventana de progreso"
+            }
+        }
+        catch {
+            Write-Verbose "Error al aplicar SetWindowPos: $_"
+        }
+        
         return @{
-            Process     = $process
-            HtaPath     = $htaPath
-            ControlFile = $ControlFile
+            Process = $process
+            HtaPath = $htaPath
         }
     }
     catch {
@@ -352,24 +341,16 @@ function Close-InstallationProgress {
     )
     
     try {
-        if ($ProgressInfo) {
-            # Escribir comando de cierre en el archivo de control
-            "CLOSE" | Out-File -FilePath $ProgressInfo.ControlFile -Force
-            
-            # Esperar un momento para que la ventana se cierre
-            Start-Sleep -Seconds 3
-            
-            # Si el proceso aún existe, forzar cierre
-            if ($ProgressInfo.Process -and -not $ProgressInfo.Process.HasExited) {
-                $ProgressInfo.Process | Stop-Process -Force -ErrorAction SilentlyContinue
+        if ($ProgressInfo -and $ProgressInfo.Process) {
+            # Cerrar el proceso directamente
+            if (-not $ProgressInfo.Process.HasExited) {
+                Write-Verbose "Cerrando ventana de progreso (PID: $($ProgressInfo.Process.Id))"
+                Stop-Process -Id $ProgressInfo.Process.Id -Force -ErrorAction SilentlyContinue
             }
             
-            # Limpiar archivos temporales
-            if (Test-Path $ProgressInfo.HtaPath) {
+            # Limpiar archivo HTA temporal
+            if ($ProgressInfo.HtaPath -and (Test-Path $ProgressInfo.HtaPath)) {
                 Remove-Item $ProgressInfo.HtaPath -Force -ErrorAction SilentlyContinue
-            }
-            if (Test-Path $ProgressInfo.ControlFile) {
-                Remove-Item $ProgressInfo.ControlFile -Force -ErrorAction SilentlyContinue
             }
         }
     }
@@ -716,7 +697,57 @@ WScript.Quit
         if (-not $isSystem) {
             # Si NO estamos ejecutando como SYSTEM, ejecutar directamente
             Write-Verbose "Ejecutando script directamente en la sesion actual del usuario"
-            $process = Start-Process -FilePath $scriptExecutable -ArgumentList "`"$scriptPath`"" -Wait -PassThru -WindowStyle Hidden
+            
+            if ($useHTA) {
+                # Para HTA, usar SetWindowPos para mantener siempre en primer plano
+                Write-Verbose "Usando SetWindowPos para mantener HTA en primer plano"
+                
+                # Iniciar el proceso HTA sin esperar
+                $process = Start-Process -FilePath "mshta.exe" -ArgumentList "`"$scriptPath`"" -PassThru -WindowStyle Normal
+                
+                # Definir la función SetWindowPos de user32.dll
+                $code = @'
+[DllImport("user32.dll")]
+public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+'@
+                
+                try {
+                    $type = Add-Type -MemberDefinition $code -Name "Win32SetWindowPos" -Namespace "Win32Functions" -PassThru -ErrorAction SilentlyContinue
+                    
+                    # Esperar a que la ventana se cree
+                    Start-Sleep -Milliseconds 500
+                    
+                    # Obtener el handle de la ventana
+                    $mainWindowHandle = $process.MainWindowHandle
+                    
+                    # Si no se obtuvo el handle, intentar refrescar
+                    if ($mainWindowHandle -eq [IntPtr]::Zero) {
+                        $process.Refresh()
+                        $mainWindowHandle = $process.MainWindowHandle
+                    }
+                    
+                    if ($mainWindowHandle -ne [IntPtr]::Zero) {
+                        # -1 indica HWND_TOPMOST (Siempre al frente)
+                        # 0x0001 = SWP_NOSIZE, 0x0002 = SWP_NOMOVE
+                        $result = $type::SetWindowPos($mainWindowHandle, [IntPtr](-1), 0, 0, 0, 0, 0x0001 -bor 0x0002)
+                        Write-Verbose "SetWindowPos aplicado: $result"
+                    }
+                    else {
+                        Write-Verbose "No se pudo obtener el handle de la ventana HTA"
+                    }
+                }
+                catch {
+                    Write-Verbose "Error al aplicar SetWindowPos: $_"
+                    # Continuar de todos modos, el HTA tiene su propio window.focus()
+                }
+                
+                # Esperar a que el proceso termine
+                $process.WaitForExit()
+            }
+            else {
+                # Para VBScript, ejecutar normalmente (ya usa vbSystemModal)
+                $process = Start-Process -FilePath $scriptExecutable -ArgumentList "`"$scriptPath`"" -Wait -PassThru -WindowStyle Hidden
+            }
         }
         else {
             # Si estamos ejecutando como SYSTEM, necesitamos ejecutar en la sesion del usuario
@@ -1567,6 +1598,74 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                     Write-Warning "Error al preparar archivos: $_"
                     # Continuar de todos modos, el error se manejara en la instalacion
                 }
+                
+                # DETECCION DE SESIONES: Verificar si hay usuarios conectados
+                Write-Verbose "Verificando sesiones de usuario activas..."
+                $activeSessions = $null
+                try {
+                    $activeSessions = query user 2>$null | Select-Object -Skip 1
+                }
+                catch {
+                    Write-Verbose "No se pudieron obtener sesiones de usuario"
+                }
+                
+                $hasActiveSessions = $false
+                if ($activeSessions) {
+                    foreach ($session in $activeSessions) {
+                        if (-not [string]::IsNullOrWhiteSpace($session)) {
+                            $hasActiveSessions = $true
+                            break
+                        }
+                    }
+                }
+                
+                if (-not $hasActiveSessions) {
+                    # NO HAY SESIONES ACTIVAS: Instalar automáticamente
+                    Write-Host "=== NO SE DETECTARON SESIONES DE USUARIO ===" -ForegroundColor Yellow
+                    Write-Host "Procediendo con instalacion automatica..." -ForegroundColor Cyan
+                    
+                    # Log: Instalación automática por falta de sesiones
+                    Add-DeploymentLog -AppName $Name -EventType "InstallationStarted" -Details "Instalacion automatica - no hay sesiones activas (intento $currentAttempt)" -Attempt $currentAttempt
+                    
+                    # Ejecutar la instalacion
+                    Write-Host "Ejecutando instalacion de $Name..." -ForegroundColor Green
+                    $deployResult = Invoke-GbDeployment -Name $Name
+                    
+                    # Log: Instalacion completada
+                    $status = if ($deployResult.Success) { "Exitosa" } else { "Fallida" }
+                    Add-DeploymentLog -AppName $Name -EventType "InstallationCompleted" -Details "Estado: $status - $($deployResult.Message)" -Attempt $currentAttempt
+                    
+                    # Guardar resultado en el registro
+                    Save-DeploymentResult -AppName $Name -Result $deployResult | Out-Null
+                    
+                    # Eliminar la tarea programada
+                    Write-Verbose "Eliminando tarea programada..."
+                    Remove-GbScheduledTask -TaskName $taskName -Force -ErrorAction SilentlyContinue
+                    
+                    if ($deployResult.Success) {
+                        Write-Host "Despliegue de $Name completado exitosamente." -ForegroundColor Green
+                        
+                        # Devolver JSON con resultado exitoso
+                        $jsonResult = @{
+                            result = "OK"
+                            log    = @("Instalacion automatica completada (sin sesiones): $($deployResult.Message)")
+                        }
+                        return ($jsonResult | ConvertTo-Json -Compress)
+                    }
+                    else {
+                        Write-Warning "El despliegue de $Name finalizo con errores: $($deployResult.Message)"
+                        
+                        # Devolver JSON con error
+                        $jsonResult = @{
+                            result = "ERROR"
+                            log    = @("Instalacion automatica fallida: $($deployResult.Message)")
+                        }
+                        return ($jsonResult | ConvertTo-Json -Compress)
+                    }
+                }
+                
+                # HAY SESIONES ACTIVAS: Preguntar al usuario
+                Write-Host "Sesiones de usuario detectadas. Mostrando dialogo..." -ForegroundColor Cyan
                 
                 # Log: Mensaje mostrado al usuario
                 Add-DeploymentLog -AppName $Name -EventType "MessageShown" -Details "Intento $currentAttempt de $N" -Attempt $currentAttempt
