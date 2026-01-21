@@ -290,7 +290,7 @@ function Show-InstallationProgress {
 </head>
 <body>
     <div class="container">
-        <div class="logo">DeployCnf</div>
+        <div class="logo">$escapedBranding</div>
         <h1 id="status">INSTALANDO</h1>
         <div class="app-name">$escapedAppName<span class="dots" id="dots"></span></div>
         <div class="spinner"></div>
