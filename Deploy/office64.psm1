@@ -352,6 +352,186 @@ Function Start-Preinstall {
     return $result
 }
 
+Function Repair-OfficeShortcuts {
+    <#
+    .SYNOPSIS
+        Repara accesos directos de Office que apunten a rutas incorrectas
+    
+    .DESCRIPTION
+        Busca accesos directos de Office en la barra de tareas y menu inicio,
+        y actualiza las rutas para que apunten a la nueva ubicacion de 64-bit
+    
+    .OUTPUTS
+        PSCustomObject con informacion sobre los accesos directos reparados
+    
+    .EXAMPLE
+        $repair = Repair-OfficeShortcuts
+        Write-Host "Accesos directos reparados: $($repair.RepairedCount)"
+    #>
+    
+    [CmdletBinding()]
+    [OutputType([PSCustomObject])]
+    param()
+    
+    $result = [PSCustomObject]@{
+        ShortcutsFound    = 0
+        ShortcutsRepaired = 0
+        ShortcutsFailed   = 0
+        Details           = @()
+    }
+    
+    try {
+        Write-Host "`nReparando accesos directos de Office..." -ForegroundColor Yellow
+        
+        # Crear objeto WScript.Shell para manipular accesos directos
+        $shell = New-Object -ComObject WScript.Shell
+        
+        # Rutas donde buscar accesos directos
+        $shortcutPaths = @(
+            "$env:AppData\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar",
+            "$env:AppData\Microsoft\Windows\Start Menu\Programs"
+        )
+        
+        # Aplicaciones de Office a buscar
+        $officeApps = @(
+            @{Name = "Word"; Exe = "WINWORD.EXE" },
+            @{Name = "Excel"; Exe = "EXCEL.EXE" },
+            @{Name = "PowerPoint"; Exe = "POWERPNT.EXE" },
+            @{Name = "Outlook"; Exe = "OUTLOOK.EXE" },
+            @{Name = "Access"; Exe = "MSACCESS.EXE" },
+            @{Name = "Publisher"; Exe = "MSPUB.EXE" },
+            @{Name = "OneNote"; Exe = "ONENOTE.EXE" }
+        )
+        
+        # Obtener la ruta correcta de Office 64-bit
+        $office64Path = $null
+        $regPath = "HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration"
+        if (Test-Path -Path $regPath) {
+            $config = Get-ItemProperty -Path $regPath -ErrorAction SilentlyContinue
+            if ($config -and $config.InstallationPath) {
+                $office64Path = Join-Path -Path $config.InstallationPath -ChildPath "Office16"
+            }
+        }
+        
+        if (-not $office64Path -or -not (Test-Path -Path $office64Path)) {
+            Write-Warning "No se pudo determinar la ruta de Office 64-bit"
+            return $result
+        }
+        
+        Write-Verbose "Ruta de Office 64-bit: $office64Path"
+        
+        # Buscar y reparar accesos directos
+        foreach ($searchPath in $shortcutPaths) {
+            if (-not (Test-Path -Path $searchPath)) {
+                Write-Verbose "Ruta no encontrada: $searchPath"
+                continue
+            }
+            
+            Write-Verbose "Buscando en: $searchPath"
+            
+            # Buscar todos los archivos .lnk recursivamente
+            $shortcuts = Get-ChildItem -Path $searchPath -Filter "*.lnk" -Recurse -ErrorAction SilentlyContinue
+            
+            foreach ($shortcut in $shortcuts) {
+                try {
+                    $lnk = $shell.CreateShortcut($shortcut.FullName)
+                    $targetPath = $lnk.TargetPath
+                    
+                    # Verificar si es un acceso directo de Office
+                    $isOfficeShortcut = $false
+                    $appInfo = $null
+                    
+                    foreach ($app in $officeApps) {
+                        if ($targetPath -like "*\$($app.Exe)") {
+                            $isOfficeShortcut = $true
+                            $appInfo = $app
+                            break
+                        }
+                    }
+                    
+                    if ($isOfficeShortcut) {
+                        $result.ShortcutsFound++
+                        
+                        # Construir la nueva ruta correcta
+                        $newTargetPath = Join-Path -Path $office64Path -ChildPath $appInfo.Exe
+                        
+                        # Verificar si la ruta actual es incorrecta
+                        if ($targetPath -ne $newTargetPath) {
+                            # Verificar que el nuevo ejecutable existe
+                            if (Test-Path -Path $newTargetPath) {
+                                Write-Verbose "Reparando: $($shortcut.Name)"
+                                Write-Verbose "  Antigua: $targetPath"
+                                Write-Verbose "  Nueva: $newTargetPath"
+                                
+                                # Actualizar el acceso directo
+                                $lnk.TargetPath = $newTargetPath
+                                $lnk.Save()
+                                
+                                $result.ShortcutsRepaired++
+                                $result.Details += [PSCustomObject]@{
+                                    Name     = $shortcut.Name
+                                    Location = $shortcut.DirectoryName
+                                    OldPath  = $targetPath
+                                    NewPath  = $newTargetPath
+                                    Status   = "Reparado"
+                                }
+                                
+                                Write-Host "  [OK] $($shortcut.Name) -> $($appInfo.Name)" -ForegroundColor Green
+                            }
+                            else {
+                                Write-Warning "No se encontro el ejecutable: $newTargetPath"
+                                $result.ShortcutsFailed++
+                                $result.Details += [PSCustomObject]@{
+                                    Name     = $shortcut.Name
+                                    Location = $shortcut.DirectoryName
+                                    OldPath  = $targetPath
+                                    NewPath  = $newTargetPath
+                                    Status   = "Error: Ejecutable no encontrado"
+                                }
+                            }
+                        }
+                        else {
+                            Write-Verbose "Acceso directo ya correcto: $($shortcut.Name)"
+                            $result.Details += [PSCustomObject]@{
+                                Name     = $shortcut.Name
+                                Location = $shortcut.DirectoryName
+                                OldPath  = $targetPath
+                                NewPath  = $targetPath
+                                Status   = "Ya correcto"
+                            }
+                        }
+                    }
+                }
+                catch {
+                    Write-Warning "Error al procesar $($shortcut.FullName): $_"
+                    $result.ShortcutsFailed++
+                }
+            }
+        }
+        
+        # Liberar objeto COM
+        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($shell) | Out-Null
+        
+        # Resumen
+        if ($result.ShortcutsFound -eq 0) {
+            Write-Host "No se encontraron accesos directos de Office" -ForegroundColor Cyan
+        }
+        else {
+            Write-Host "`nResumen de accesos directos:" -ForegroundColor Cyan
+            Write-Host "  Encontrados: $($result.ShortcutsFound)" -ForegroundColor Cyan
+            Write-Host "  Reparados: $($result.ShortcutsRepaired)" -ForegroundColor Green
+            if ($result.ShortcutsFailed -gt 0) {
+                Write-Host "  Fallidos: $($result.ShortcutsFailed)" -ForegroundColor Yellow
+            }
+        }
+    }
+    catch {
+        Write-Warning "Error al reparar accesos directos: $_"
+    }
+    
+    return $result
+}
+
 Function Start-PostInstall {
     <#
     .SYNOPSIS
@@ -415,6 +595,16 @@ Function Start-PostInstall {
             Write-Host "Office 64-bit instalado correctamente" -ForegroundColor Green
             Write-Host "Version: $($verificationInfo.Version)" -ForegroundColor Cyan
             Write-Host "Arquitectura: 64-bit" -ForegroundColor Cyan
+            
+            # Reparar accesos directos de Office
+            try {
+                $shortcutRepair = Repair-OfficeShortcuts
+                $result | Add-Member -MemberType NoteProperty -Name "ShortcutsRepaired" -Value $shortcutRepair.ShortcutsRepaired -Force
+                $result | Add-Member -MemberType NoteProperty -Name "ShortcutsFound" -Value $shortcutRepair.ShortcutsFound -Force
+            }
+            catch {
+                Write-Warning "Error al reparar accesos directos: $_"
+            }
         }
         elseif ($verificationInfo.IsInstalled -and $verificationInfo.Architecture -eq "32-bit") {
             $result.InstalledVersion = $verificationInfo.Version
