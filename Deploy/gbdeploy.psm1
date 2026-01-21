@@ -171,7 +171,7 @@ function Show-InstallationProgress {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
             padding: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #f5f5f5;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -181,30 +181,29 @@ function Show-InstallationProgress {
         .container {
             background-color: white;
             padding: 40px;
-            border-radius: 12px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            border: 2px solid #333;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
             text-align: center;
             min-width: 450px;
         }
-        .icon {
-            font-size: 60px;
-            margin-bottom: 20px;
-            animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
+        .logo {
+            font-size: 32px;
+            font-weight: 700;
+            color: #000;
+            margin-bottom: 30px;
+            letter-spacing: 2px;
         }
         h1 {
-            color: #333;
+            color: #000;
             font-size: 24px;
-            margin: 0 0 10px 0;
+            margin: 20px 0 10px 0;
             font-weight: 600;
         }
         .app-name {
-            color: #667eea;
-            font-weight: 700;
-            font-size: 28px;
+            color: #333;
+            font-weight: 600;
+            font-size: 20px;
             margin: 10px 0;
         }
         .message {
@@ -214,12 +213,12 @@ function Show-InstallationProgress {
             margin: 20px 0;
         }
         .warning {
-            background-color: #fff3cd;
-            border: 2px solid #ffc107;
-            border-radius: 8px;
+            background-color: #f0f0f0;
+            border: 2px solid #000;
+            border-radius: 4px;
             padding: 15px;
             margin: 20px 0;
-            color: #856404;
+            color: #000;
             font-weight: 600;
             font-size: 15px;
         }
@@ -229,11 +228,11 @@ function Show-InstallationProgress {
             text-align: left;
             font-size: 32px;
             font-weight: bold;
-            color: #667eea;
+            color: #000;
         }
         .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
+            border: 4px solid #e0e0e0;
+            border-top: 4px solid #000;
             border-radius: 50%;
             width: 50px;
             height: 50px;
@@ -276,7 +275,7 @@ function Show-InstallationProgress {
 </head>
 <body>
     <div class="container">
-        <div class="icon">⚙️</div>
+        <div class="logo">DeployCnf</div>
         <h1 id="status">INSTALANDO</h1>
         <div class="app-name">$escapedAppName<span class="dots" id="dots"></span></div>
         <div class="spinner"></div>
