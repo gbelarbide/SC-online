@@ -4,6 +4,42 @@
 (new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/gbdeploy.psm1') | Invoke-Expression; Get-DeploymentLog -AppName "office64"
 #>
 
+function Write-GbLog {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Message,
+        
+        [Parameter(Mandatory = $false)]
+        [ValidateSet("INFO", "WARNING", "ERROR", "VERBOSE", "SUCCESS")]
+        [string]$Level = "INFO"
+    )
+    try {
+        $logDir = "C:\temp"
+        if (-not (Test-Path $logDir)) {
+            New-Item -Path $logDir -ItemType Directory -Force | Out-Null
+        }
+        $logFile = Join-Path $logDir "gbdeploy.log"
+        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        $fullMessage = "[$timestamp] [$Level] $Message"
+        
+        # Escribir al archivo
+        $fullMessage | Out-File -FilePath $logFile -Append -Encoding UTF8
+        
+        # Escribir a la consola según el nivel
+        switch ($Level) {
+            "ERROR" { Write-Host "[$Level] $Message" -ForegroundColor Red }
+            "WARNING" { Write-Warning $Message }
+            "VERBOSE" { Write-Verbose $Message }
+            "SUCCESS" { Write-Host $Message -ForegroundColor Green }
+            "INFO" { Write-Host $Message }
+        }
+    }
+    catch {
+        # Fallback silencioso si no se puede escribir el log
+    }
+}
+
 function Show-UserMessage {
     <#
     .SYNOPSIS
@@ -1186,6 +1222,7 @@ function Add-DeploymentLog {
         Set-ItemProperty -Path $logEntryPath -Name "Attempt" -Value $Attempt -Type DWord
         
         Write-Verbose "Log registrado: $EventType - $Details"
+        Write-GbLog -Message "[$AppName] [$EventType] Attempt:$Attempt - $Details" -Level "INFO"
         
         return $true
     }
@@ -1423,7 +1460,7 @@ function Start-GbDeploy {
                 }
             }
             catch {
-                Write-Warning "Error al obtener configuracion de Get-DeployCnf: $_"
+                Write-GbLog -Message "Error al obtener configuracion de Get-DeployCnf: $_" -Level "WARNING"
             }
         }
         
@@ -1501,7 +1538,7 @@ function Start-GbDeploy {
                 }
             }
             catch {
-                Write-Warning "Error al preparar archivos: $_"
+                Write-GbLog -Message "Error al preparar archivos: $_" -Level "WARNING"
                 # Continuar de todos modos, el error se manejara en la instalacion
             }
             
@@ -1509,7 +1546,7 @@ function Start-GbDeploy {
             Add-DeploymentLog -AppName $Name -EventType "InstallationStarted" -Details "Instalacion forzada - ultimo intento" -Attempt $N
             
             # Ejecutar la instalacion
-            Write-Host "Ejecutando instalacion de $Name..." -ForegroundColor Green
+            Write-GbLog -Message "Ejecutando instalacion de $Name..." -Level "SUCCESS"
             $deployResult = Invoke-GbDeployment -Name $Name
             
             # Log: Instalacion completada
@@ -1524,10 +1561,10 @@ function Start-GbDeploy {
             Remove-GbScheduledTask -TaskName $taskName -Force -ErrorAction SilentlyContinue
             
             if ($deployResult.Success) {
-                Write-Host "Despliegue de $Name completado exitosamente." -ForegroundColor Green
+                Write-GbLog -Message "Despliegue de $Name completado exitosamente." -Level "SUCCESS"
             }
             else {
-                Write-Warning "El despliegue de $Name finalizo con errores: $($deployResult.Message)"
+                Write-GbLog -Message "El despliegue de $Name finalizo con errores: $($deployResult.Message)" -Level "WARNING"
             }
         }
         else {
@@ -1538,8 +1575,8 @@ function Start-GbDeploy {
             
             if ($isFirstRun) {
                 # PRIMERA EJECUCIÓN: Solo programar la tarea para 1 minuto después
-                Write-Host "=== PRIMERA EJECUCION ===" -ForegroundColor Cyan
-                Write-Host "Programando primera verificacion en 1 minuto..." -ForegroundColor Yellow
+                Write-GbLog -Message "=== PRIMERA EJECUCION ===" -Level "INFO"
+                Write-GbLog -Message "Programando primera verificacion en 1 minuto..." -Level "WARNING"
                 
                 # Log: Primera ejecución
                 Add-DeploymentLog -AppName $Name -EventType "MessageShown" -Details "Primera ejecucion - programando tarea" -Attempt 1
@@ -1678,14 +1715,14 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                 
                 if (-not $hasActiveSessions) {
                     # NO HAY SESIONES ACTIVAS: Instalar automáticamente
-                    Write-Host "=== NO SE DETECTARON SESIONES DE USUARIO ===" -ForegroundColor Yellow
-                    Write-Host "Procediendo con instalacion automatica..." -ForegroundColor Cyan
+                    Write-GbLog -Message "=== NO SE DETECTARON SESIONES DE USUARIO ===" -Level "WARNING"
+                    Write-GbLog -Message "Procediendo con instalacion automatica..." -Level "INFO"
                     
                     # Log: Instalación automática por falta de sesiones
                     Add-DeploymentLog -AppName $Name -EventType "InstallationStarted" -Details "Instalacion automatica - no hay sesiones activas (intento $currentAttempt)" -Attempt $currentAttempt
                     
                     # Ejecutar la instalacion
-                    Write-Host "Ejecutando instalacion de $Name..." -ForegroundColor Green
+                    Write-GbLog -Message "Ejecutando instalacion de $Name..." -Level "SUCCESS"
                     $deployResult = Invoke-GbDeployment -Name $Name
                     
                     # Log: Instalacion completada
@@ -1700,7 +1737,7 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                     Remove-GbScheduledTask -TaskName $taskName -Force -ErrorAction SilentlyContinue
                     
                     if ($deployResult.Success) {
-                        Write-Host "Despliegue de $Name completado exitosamente." -ForegroundColor Green
+                        Write-GbLog -Message "Despliegue de $Name completado exitosamente." -Level "SUCCESS"
                         
                         # Devolver JSON con resultado exitoso
                         $jsonResult = @{
@@ -1710,7 +1747,7 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                         return ($jsonResult | ConvertTo-Json -Compress)
                     }
                     else {
-                        Write-Warning "El despliegue de $Name finalizo con errores: $($deployResult.Message)"
+                        Write-GbLog -Message "El despliegue de $Name finalizo con errores: $($deployResult.Message)" -Level "WARNING"
                         
                         # Devolver JSON con error
                         $jsonResult = @{
@@ -1722,7 +1759,7 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                 }
                 
                 # HAY SESIONES ACTIVAS: Preguntar al usuario
-                Write-Host "Sesiones de usuario detectadas. Mostrando dialogo..." -ForegroundColor Cyan
+                Write-GbLog -Message "Sesiones de usuario detectadas. Mostrando dialogo..." -Level "INFO"
                 
                 # Log: Mensaje mostrado al usuario
                 Add-DeploymentLog -AppName $Name -EventType "MessageShown" -Details "Intento $currentAttempt de $N" -Attempt $currentAttempt
@@ -1735,13 +1772,13 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                 
                 if ($response -eq "OK") {
                     # Usuario acepto: Ejecutar instalacion y eliminar tarea
-                    Write-Host "Usuario acepto la instalacion." -ForegroundColor Green
+                    Write-GbLog -Message "Usuario acepto la instalacion." -Level "SUCCESS"
                     
                     # Log: Instalacion iniciada
                     Add-DeploymentLog -AppName $Name -EventType "InstallationStarted" -Details "Usuario acepto en intento $currentAttempt" -Attempt $currentAttempt
                     
                     # Ejecutar la instalacion
-                    Write-Host "Ejecutando instalacion de $Name..." -ForegroundColor Green
+                    Write-GbLog -Message "Ejecutando instalacion de $Name..." -Level "SUCCESS"
                     $deployResult = Invoke-GbDeployment -Name $Name
                     
                     # Log: Instalacion completada
@@ -1756,7 +1793,7 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                     Remove-GbScheduledTask -TaskName $taskName -Force -ErrorAction SilentlyContinue
                     
                     if ($deployResult.Success) {
-                        Write-Host "Despliegue de $Name completado exitosamente." -ForegroundColor Green
+                        Write-GbLog -Message "Despliegue de $Name completado exitosamente." -Level "SUCCESS"
                         
                         # Devolver JSON con resultado exitoso
                         $jsonResult = @{
@@ -1778,7 +1815,7 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                 }
                 else {
                     # Usuario rechazo: Programar siguiente ejecucion
-                    Write-Host "Usuario rechazo la instalacion. Programando siguiente intento..." -ForegroundColor Yellow
+                    Write-GbLog -Message "Usuario rechazo la instalacion. Programando siguiente intento..." -Level "WARNING"
                 
                     # Incrementar contador de intentos
                     $nextAttempt = $currentAttempt + 1
@@ -1824,7 +1861,7 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                     # Registrar con ambos triggers
                     Register-ScheduledTask -TaskName $taskName -TaskPath $taskPath -Action $action -Trigger @($triggerTime, $triggerLogon) -Principal $principal -Settings $settings -Description $metadata -Force | Out-Null
                 
-                    Write-Host "Siguiente intento programado para: $nextRunTime (o al iniciar sesion)" -ForegroundColor Cyan
+                    Write-GbLog -Message "Siguiente intento programado para: $nextRunTime (o al iniciar sesion)" -Level "INFO"
                 
                     # Devolver JSON indicando que se programó siguiente intento
                     $jsonResult = @{
@@ -1867,7 +1904,7 @@ function Invoke-GbDeployment {
     )
     
     try {
-        Write-Host "Descargando modulo de despliegue para $Name..." -ForegroundColor Cyan
+        Write-GbLog -Message "Descargando modulo de despliegue para $Name..." -Level "INFO"
         
         # Convertir nombre a minusculas (GitHub es case-sensitive)
         $moduleName = $Name.ToLower()
@@ -1884,11 +1921,11 @@ function Invoke-GbDeployment {
         $deployResult = $null
         
         if (Get-Command Start-Deploy -ErrorAction SilentlyContinue) {
-            Write-Host "Ejecutando Start-Deploy..." -ForegroundColor Green
+            Write-GbLog -Message "Ejecutando Start-Deploy..." -Level "SUCCESS"
             $deployResult = Start-Deploy
         }
         elseif (Get-Command Start-Install -ErrorAction SilentlyContinue) {
-            Write-Host "Ejecutando Start-Install..." -ForegroundColor Green
+            Write-GbLog -Message "Ejecutando Start-Install..." -Level "SUCCESS"
             Start-Install
             # Start-Install no devuelve resultado, asumir exito si no hay excepcion
             $deployResult = [PSCustomObject]@{
@@ -1980,7 +2017,7 @@ function Save-DeploymentResult {
         Set-ItemProperty -Path $appPath -Name "LastDeploymentDate" -Value (Get-Date).ToString("yyyy-MM-dd HH:mm:ss") -Type String
         Set-ItemProperty -Path $appPath -Name "Success" -Value $Result.Success.ToString() -Type String
         
-        Write-Host "Resultado guardado en el registro: $appPath" -ForegroundColor Green
+        Write-GbLog -Message "Resultado guardado en el registro: $appPath" -Level "SUCCESS"
         Write-Verbose "JSON guardado: $jsonResult"
         
         return $true
