@@ -583,7 +583,7 @@ Add-Type -AssemblyName System.Drawing
 
 # Título de Acción
 `$labelTitle = New-Object System.Windows.Forms.Label
-`$labelTitle.Text = 'ATENCIÓN REQUERIDA'
+`$labelTitle.Text = 'ATENCION REQUERIDA'
 `$labelTitle.Font = New-Object System.Drawing.Font('Segoe UI', 18, [System.Drawing.FontStyle]::Bold)
 `$labelTitle.ForeColor = [System.Drawing.Color]::Black
 `$labelTitle.Size = New-Object System.Drawing.Size(490, 40)
@@ -657,7 +657,7 @@ elseif ('$Buttons' -eq 'OK') {
 }
 else {
     `$btnCancel = New-Object System.Windows.Forms.Button
-    `$btnCancel.Text = 'Más tarde'
+    `$btnCancel.Text = 'Mas tarde'
     `$btnCancel.Size = New-Object System.Drawing.Size(140, 40)
     `$btnCancel.Font = New-Object System.Drawing.Font('Segoe UI', 10)
     `$btnCancel.BackColor = [System.Drawing.Color]::FromArgb(200, 200, 200)
@@ -1575,7 +1575,7 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                 Add-DeploymentLog -AppName $Name -EventType "MessageShown" -Details "Intento $currentAttempt de $N" -Attempt $currentAttempt
                 
                 # Preguntar al usuario (timeout de 15 minutos)
-                $response = Show-UserPrompt -Message $userMessage -Title "Instalacion de $Name" -Buttons "OKCancel" -Icon "Question" -TimeoutSeconds 900
+                $response = Show-UserPrompt -Message $userMessage.Message -Title "Instalacion de $Name" -Buttons "OKCancel" -Icon "Question" -TimeoutSeconds 900
                 
                 # Log: Respuesta del usuario
                 Add-DeploymentLog -AppName $Name -EventType "UserResponse" -Details "Respuesta: $response" -Attempt $currentAttempt

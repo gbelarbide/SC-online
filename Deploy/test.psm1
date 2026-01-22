@@ -44,6 +44,7 @@ Function Test-Installed {
     param()
     
     Write-GbLog -Message "=== VERIFICACION DE INSTALACION ===" -Level "INFO"
+    Start-Sleep -Seconds 10
     
     # Verificar si existe el archivo de test
     $testFile = "C:\temp\test.txt"
@@ -89,6 +90,7 @@ Function Start-Preinstall {
     
     Write-GbLog -Message "=== PREPARACION ===" -Level "INFO"
     Write-GbLog -Message "[SIMULACION - No se descargaran archivos reales]" -Level "VERBOSE"
+    Start-Sleep -Seconds 10
     
     # Crear directorio
     if (-not (Test-Path -Path $InstallPath)) {
@@ -197,6 +199,7 @@ Function Start-PostInstall {
     )
     
     Write-GbLog -Message "=== VERIFICACION POST-INSTALACION ===" -Level "INFO"
+    Start-Sleep -Seconds 10
     
     # Verificar estado actual
     $verification = Test-Installed
