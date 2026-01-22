@@ -301,7 +301,7 @@ Add-Type -AssemblyName System.Drawing
 `$topWindow.Dispose()
 "@
         
-        $scriptContent | Out-File -FilePath $scriptPath -Encoding UTF8 -Force
+        $scriptContent | Out-File -FilePath $scriptPath -Encoding Unicode -Force
         
         $process = $null
         $taskName = $null
@@ -1491,10 +1491,10 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                         $preinstallResult = Start-Preinstall
                         
                         if ($preinstallResult.Success) {
-                            Write-Host "Archivos de instalacion preparados correctamente" -ForegroundColor Green
+                            Write-GbLog -Message "Archivos de instalacion preparados correctamente" -Level "SUCCESS"
                         }
                         else {
-                            Write-Warning "Error en la preparacion: $($preinstallResult.ErrorMessage)"
+                            Write-GbLog -Message "Error en la preparacion: $($preinstallResult.ErrorMessage)" -Level "WARNING"
                         }
                     }
                     else {
@@ -1502,7 +1502,7 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                     }
                 }
                 catch {
-                    Write-Warning "Error al preparar archivos: $_"
+                    Write-GbLog -Message "Error al preparar archivos: $_" -Level "WARNING"
                     # Continuar de todos modos, el error se manejara en la instalacion
                 }
                 
@@ -1620,7 +1620,7 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                         return ($jsonResult | ConvertTo-Json -Compress)
                     }
                     else {
-                        Write-Warning "El despliegue de $Name finalizo con errores: $($deployResult.Message)"
+                        Write-GbLog -Message "El despliegue de $Name finalizo con errores: $($deployResult.Message)" -Level "WARNING"
                         
                         # Devolver JSON con error
                         $jsonResult = @{
