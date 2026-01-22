@@ -1566,10 +1566,25 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                 # Calcular hora de siguiente ejecucion (1 minuto)
                 $nextRunTime = (Get-Date).AddMinutes(1)
                 
+                # Carpeta temporal y extracción del Executer
+                $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+                $isSystem = $currentUser.IsSystem
+                $tempFolder = if ($isSystem) { "C:\ProgramData\Temp" } else { $env:TEMP }
+                if (-not (Test-Path $tempFolder)) {
+                    New-Item -Path $tempFolder -ItemType Directory -Force | Out-Null
+                }
+
+                $executerPath = Join-Path $tempFolder "Executer.exe"
+                if (-not (Test-Path $executerPath)) {
+                    Write-Verbose "Extrayendo Executer a $executerPath"
+                    # Asumimos que $Executer base64 está disponible en el scope
+                    $bytes = [Convert]::FromBase64String($Executer)
+                    [System.IO.File]::WriteAllBytes($executerPath, $bytes)
+                }
+
                 # Crear nueva tarea programada
                 Write-Verbose "Creando tarea para primera ejecucion real en $nextRunTime"
                 
-                $action = New-ScheduledTaskAction -Execute $executerPath -Argument "-File `"$($scriptPath)`""
                 # Nota: En la ejecución a través de la tarea programada, el scriptBlock se serializa en un archivo .ps1 intermedio
                 $interimScript = "$tempFolder\Interim_$(Get-Random).ps1"
                 $scriptBlock.ToString() | Out-File $interimScript -Encoding UTF8
