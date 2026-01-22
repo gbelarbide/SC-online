@@ -1575,7 +1575,7 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                 Add-DeploymentLog -AppName $Name -EventType "MessageShown" -Details "Intento $currentAttempt de $N" -Attempt $currentAttempt
                 
                 # Preguntar al usuario (timeout de 15 minutos)
-                $response = Show-UserPrompt -Message $userMessage.Message -Title "Instalacion de $Name" -Buttons "OKCancel" -Icon "Question" -TimeoutSeconds 900
+                $response = Show-UserPrompt -Message $userMessage -Title "Instalacion de $Name" -Buttons "OKCancel" -Icon "Question" -TimeoutSeconds 900
                 
                 # Log: Respuesta del usuario
                 Add-DeploymentLog -AppName $Name -EventType "UserResponse" -Details "Respuesta: $response" -Attempt $currentAttempt
