@@ -543,7 +543,6 @@ function Show-UserPrompt {
         
         # Escapar variables para el script
         $escapedBranding = $brandingMessage -replace "'", "''" -replace "`r`n", "`n" -replace "`n", " - "
-        $escapedAppName = $Name -replace "'", "''"
         $escapedMessage = $Message -replace "'", "''"
         $escapedTitle = $Title -replace "'", "''"
         
@@ -711,7 +710,7 @@ if ($TimeoutSeconds -gt 0) {
         if (-not $isSystem) {
             # Si NO estamos ejecutando como SYSTEM, ejecutar directamente usando Executer
             Write-Verbose "Ejecutando prompt directamente usando Executer"
-            $process = Start-Process -FilePath $scriptExecutable -ArgumentList "-File `"$scriptPath`"" -Wait -PassThru -WindowStyle Hidden
+            $null = Start-Process -FilePath $scriptExecutable -ArgumentList "-File `"$scriptPath`"" -Wait -PassThru -WindowStyle Hidden
         }
         else {
             # Si estamos ejecutando como SYSTEM, necesitamos ejecutar en la sesion del usuario
@@ -738,7 +737,7 @@ if ($TimeoutSeconds -gt 0) {
             if (-not $sessionUser) { $sessionUser = (Get-WmiObject -Class Win32_ComputerSystem).UserName }
             
             if ($sessionUser) {
-                $principal = New-ScheduledTaskPrincipal -UserId $sessionUser -LogonType InteractiveToken -RunLevel Highest
+                $principal = New-ScheduledTaskPrincipal -UserId $sessionUser -LogonType Interactive -RunLevel Highest
                 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
                 
                 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
