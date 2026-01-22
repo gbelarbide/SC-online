@@ -676,7 +676,8 @@ else {
     `$btnPanel.Controls.AddRange(@(`$btnCancel, `$btnOk))
 }
 
-`$form.Controls.AddRange(@(`$labelBranding, `$labelTitle, `$labelMsg, `$labelCountdown, `$btnPanel))
+`$form.Controls.AddRange(@(`$labelTitle, `$labelMsg, `$labelCountdown, `$btnPanel))
+
 
 # Timer Animación / Timeout
 if ($TimeoutSeconds -gt 0) {
@@ -692,7 +693,7 @@ if ($TimeoutSeconds -gt 0) {
         else {
             `$m = [Math]::Floor(`$script:timeLeft / 60)
             `$s = `$script:timeLeft % 60
-            `$labelCountdown.Text = "Se instalará automáticamente en: " + `$m + ":" + `$s.ToString("00")
+            `$labelCountdown.Text = "Se instalara automaticamente en: " + `$m + ":" + `$s.ToString("00")
         }
     })
     `$timer.Start()
