@@ -1325,8 +1325,8 @@ function Start-GbDeploy {
         
         if ($isLastAttempt) {
             # ULTIMA EJECUCION: Mostrar aviso y ejecutar
-            Write-Host "=== ULTIMA EJECUCION ===" -ForegroundColor Red
-            Write-Host "Se instalara $Name automaticamente en 5 minutos" -ForegroundColor Yellow
+            Write-GbLog -Message "=== ULTIMA EJECUCION ===" -Level "ERROR"
+            Write-GbLog -Message "Se instalara $Name automaticamente en 5 minutos" -Level "WARNING"
             
             # Mostrar mensaje al usuario (siempre en primer plano)
             Show-UserPrompt -Message "La aplicacion $Name se instalara en 5 minutos.`n`nPor favor, guarde su trabajo y cierre todas las aplicaciones." -Title "Instalacion Programada" -Buttons "OK" -Icon "Warning" -TimeoutSeconds 0
@@ -1336,7 +1336,7 @@ function Start-GbDeploy {
             Start-Sleep -Seconds 300
             
             # PREINSTALACION: Descargar archivos antes de instalar
-            Write-Host "Preparando archivos de instalacion..." -ForegroundColor Cyan
+            Write-GbLog -Message "Preparando archivos de instalacion..." -Level "INFO"
             try {
                 # Descargar el modulo para ejecutar Start-Preinstall
                 $moduleName = $Name.ToLower()
@@ -1461,7 +1461,7 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
             }
             else {
                 # EJECUCIONES SUBSIGUIENTES: Preguntar al usuario
-                Write-Host "=== INTENTO $currentAttempt de $N ===" -ForegroundColor Cyan
+                Write-GbLog -Message "=== INTENTO $currentAttempt de $N ===" -Level "INFO"
                 
                 # Construir mensaje para el usuario
                 if ([string]::IsNullOrWhiteSpace($Message)) {
@@ -1474,7 +1474,7 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                 }
                 
                 # PREINSTALACION: Descargar archivos antes de preguntar al usuario
-                Write-Host "Preparando archivos de instalacion..." -ForegroundColor Cyan
+                Write-GbLog -Message "Preparando archivos de instalacion..." -Level "INFO"
                 try {
                     # Descargar el modulo para ejecutar Start-Preinstall
                     $moduleName = $Name.ToLower()
@@ -1536,7 +1536,9 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                     
                     # Ejecutar la instalacion
                     Write-GbLog -Message "Ejecutando instalacion de $Name..." -Level "SUCCESS"
+                    $progressUI = Show-InstallationProgress -AppName $Name
                     $deployResult = Invoke-GbDeployment -Name $Name
+                    Close-InstallationProgress -ProgressInfo $progressUI
                     
                     # Log: Instalacion completada
                     $status = if ($deployResult.Success) { "Exitosa" } else { "Fallida" }
@@ -1592,7 +1594,9 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                     
                     # Ejecutar la instalacion
                     Write-GbLog -Message "Ejecutando instalacion de $Name..." -Level "SUCCESS"
+                    $progressUI = Show-InstallationProgress -AppName $Name
                     $deployResult = Invoke-GbDeployment -Name $Name
+                    Close-InstallationProgress -ProgressInfo $progressUI
                     
                     # Log: Instalacion completada
                     $status = if ($deployResult.Success) { "Exitosa" } else { "Fallida" }
