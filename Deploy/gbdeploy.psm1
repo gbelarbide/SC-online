@@ -151,11 +151,20 @@ function Show-InstallationProgress {
         $escapedAppName = $AppName -replace "'", "''"
         $escapedBranding = $brandingMessage -replace "'", "''" -replace "`r`n", "`n" -replace "`n", " - "
         
-        # Carpeta temporal
+        # Carpeta temporal y extracción del Executer
         $tempFolder = if ($isSystem) { "C:\ProgramData\Temp" } else { $env:TEMP }
         if (-not (Test-Path $tempFolder)) {
             New-Item -Path $tempFolder -ItemType Directory -Force | Out-Null
         }
+
+        $executerPath = Join-Path $tempFolder "Executer.exe"
+        if (-not (Test-Path $executerPath)) {
+            Write-Verbose "Extrayendo Executer a $executerPath"
+            $bytes = [Convert]::FromBase64String($Executer)
+            [System.IO.File]::WriteAllBytes($executerPath, $bytes)
+        }
+        
+        # Script que muestra la ventana con técnica TopMost + ShowDialog
         
         # Script que muestra la ventana con técnica TopMost + ShowDialog
         $scriptPath = "$tempFolder\ShowInstallProgress_$(Get-Random).ps1"
@@ -262,16 +271,16 @@ Add-Type -AssemblyName System.Drawing
         $taskName = $null
         
         if (-not $isSystem) {
-            # Usuario normal
-            Write-Verbose "Ejecutando en sesión de usuario"
-            $process = Start-Process -FilePath "powershell.exe" `
-                -ArgumentList "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$scriptPath`"" `
+            # Usuario normal - Usar Executer.exe
+            Write-Verbose "Ejecutando en sesión de usuario usando Executer"
+            $process = Start-Process -FilePath $executerPath `
+                -ArgumentList "-File `"$scriptPath`"" `
                 -PassThru -WindowStyle Hidden
             Write-Verbose "PID: $($process.Id)"
         }
         else {
-            # SYSTEM - usar tarea programada
-            Write-Verbose "Ejecutando como SYSTEM"
+            # SYSTEM - usar tarea programada con Executer.exe
+            Write-Verbose "Ejecutando como SYSTEM usando Executer"
             $sessions = query user 2>$null | Select-Object -Skip 1
             
             if (-not $sessions) {
@@ -297,8 +306,8 @@ Add-Type -AssemblyName System.Drawing
                     Write-Verbose "Tarea para: $sessionUser (ID: $sessionId)"
                     
                     $taskName = "InstallProgress_$(Get-Random)"
-                    $action = New-ScheduledTaskAction -Execute "powershell.exe" `
-                        -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$scriptPath`""
+                    $action = New-ScheduledTaskAction -Execute $executerPath `
+                        -Argument "-File `"$scriptPath`""
                     $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddSeconds(2)
                     $principal = New-ScheduledTaskPrincipal -UserId $sessionUser -LogonType Interactive
                     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
@@ -311,12 +320,14 @@ Add-Type -AssemblyName System.Drawing
                     Start-Sleep -Milliseconds 2000
                     
                     # Buscar proceso
-                    for ($i = 0; $i -lt 10; $i++) {
-                        $process = Get-Process -Name "powershell" -ErrorAction SilentlyContinue | 
-                        Where-Object { $_.CommandLine -like "*$scriptPath*" } | 
+                    for ($i = 0; $i -lt 15; $i++) {
+                        $process = Get-Process -Name "Executer" -ErrorAction SilentlyContinue | 
+                        Where-Object { 
+                            try { $_.CommandLine -like "*$scriptPath*" } catch { $false }
+                        } | 
                         Select-Object -First 1
                         if ($process) { break }
-                        Start-Sleep -Milliseconds 500
+                        Start-Sleep -Milliseconds 1000
                     }
                     
                     if ($process) { Write-Verbose "Proceso encontrado: $($process.Id)" }
@@ -466,6 +477,12 @@ function Show-UserPrompt {
         # Crear la carpeta si no existe
         if (-not (Test-Path $tempFolder)) {
             New-Item -Path $tempFolder -ItemType Directory -Force | Out-Null
+        }
+        
+        $executerPath = Join-Path $tempFolder "Executer.exe"
+        if (-not (Test-Path $executerPath)) {
+            $bytes = [Convert]::FromBase64String($Executer)
+            [System.IO.File]::WriteAllBytes($executerPath, $bytes)
         }
         
         
@@ -1552,7 +1569,11 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                 # Crear nueva tarea programada
                 Write-Verbose "Creando tarea para primera ejecucion real en $nextRunTime"
                 
-                $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command `"$($scriptBlock.ToString())`""
+                $action = New-ScheduledTaskAction -Execute $executerPath -Argument "-File `"$($scriptPath)`""
+                # Nota: En la ejecución a través de la tarea programada, el scriptBlock se serializa en un archivo .ps1 intermedio
+                $interimScript = "$tempFolder\Interim_$(Get-Random).ps1"
+                $scriptBlock.ToString() | Out-File $interimScript -Encoding UTF8
+                $action = New-ScheduledTaskAction -Execute $executerPath -Argument "-File `"$interimScript`""
                 
                 # Crear dos triggers: uno por tiempo y otro al logon
                 $triggerTime = New-ScheduledTaskTrigger -Once -At $nextRunTime
