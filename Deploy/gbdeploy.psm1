@@ -608,9 +608,13 @@ Add-Type -AssemblyName System.Drawing
 `$labelCountdown.Location = New-Object System.Drawing.Point(30, 300)
 `$labelCountdown.TextAlign = 'MiddleCenter'
 
+# Bandera para permitir cierre
+`$script:allowClose = `$false
+
 # Función para guardar resultado
 function Save-Result([string]`$res) {
     Set-Content -Path '$($resultPath -replace '\\', '\\')' -Value `$res -Force
+    `$script:allowClose = `$true
     `$form.Close()
 }
 
@@ -694,16 +698,18 @@ if ($TimeoutSeconds -gt 0) {
     `$timer.Start()
 }
 
-# Prevenir cierre Alt+F4
+# Prevenir cierre Alt+F4 a menos que hayamos pulsado un boton
 `$form.Add_FormClosing({
     param(`$s, `$e)
-    if (`$e.CloseReason -eq [System.Windows.Forms.CloseReason]::UserClosing) { `$e.Cancel = `$true }
+    if (-not `$script:allowClose -and `$e.CloseReason -eq [System.Windows.Forms.CloseReason]::UserClosing) { 
+        `$e.Cancel = `$true 
+    }
 })
 
 [void]`$form.ShowDialog(`$topWindow)
 `$topWindow.Dispose()
 "@
-        $scriptContent | Out-File -FilePath $scriptPath -Encoding UTF8 -Force
+        $scriptContent | Out-File -FilePath $scriptPath -Encoding Unicode -Force
         
         $scriptExecutable = $executerPath
         
