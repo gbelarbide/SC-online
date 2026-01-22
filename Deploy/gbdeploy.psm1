@@ -195,12 +195,17 @@ function Show-InstallationProgress {
             if (Get-Command Get-DeployCnf -ErrorAction SilentlyContinue) {
                 $cnfResult = Get-DeployCnf
                 if ($cnfResult) {
-                    try {
-                        $cnfObject = $cnfResult | ConvertFrom-Json
-                        if ($cnfObject.Message) { $brandingMessage = $cnfObject.Message }
-                        else { $brandingMessage = $cnfResult }
+                    if ($cnfResult.Message) {
+                        $brandingMessage = $cnfResult.Message
                     }
-                    catch { $brandingMessage = $cnfResult }
+                    elseif ($cnfResult -is [string]) {
+                        try {
+                            $cnfObject = $cnfResult | ConvertFrom-Json
+                            if ($cnfObject.Message) { $brandingMessage = $cnfObject.Message }
+                            else { $brandingMessage = $cnfResult }
+                        }
+                        catch { $brandingMessage = $cnfResult }
+                    }
                 }
             }
         }
@@ -574,12 +579,17 @@ function Show-UserPrompt {
             if (Get-Command Get-DeployCnf -ErrorAction SilentlyContinue) {
                 $cnfResult = Get-DeployCnf
                 if ($cnfResult) {
-                    try {
-                        $cnfObject = $cnfResult | ConvertFrom-Json
-                        if ($cnfObject.Message) { $brandingMessage = $cnfObject.Message }
-                        else { $brandingMessage = $cnfResult }
+                    if ($cnfResult.Message) {
+                        $brandingMessage = $cnfResult.Message
                     }
-                    catch { $brandingMessage = $cnfResult }
+                    elseif ($cnfResult -is [string]) {
+                        try {
+                            $cnfObject = $cnfResult | ConvertFrom-Json
+                            if ($cnfObject.Message) { $brandingMessage = $cnfObject.Message }
+                            else { $brandingMessage = $cnfResult }
+                        }
+                        catch { $brandingMessage = $cnfResult }
+                    }
                 }
             }
         }
