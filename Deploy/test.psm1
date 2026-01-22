@@ -330,8 +330,8 @@ Function Get-DeployCnf {
     param()
     
     return [PSCustomObject]@{
-        N       = 3
-        Every   = 60
+        N       = 2
+        Every   = 1
         Message = "Se va a actualizar Office a la version de 64-bit. Durante la actualizacion podras usar tu ordenador, pero no podras usar las aplicaciones de Office."
     }
 }
