@@ -1371,9 +1371,11 @@ function Start-GbDeploy {
             # Log: Instalacion forzada iniciada
             Add-DeploymentLog -AppName $Name -EventType "InstallationStarted" -Details "Instalacion forzada - ultimo intento" -Attempt $N
             
-            # Ejecutar la instalacion
+            # Ejecutar la instalacion con progreso
             Write-GbLog -Message "Ejecutando instalacion de $Name..." -Level "SUCCESS"
+            $progressUI = Show-InstallationProgress -AppName $Name
             $deployResult = Invoke-GbDeployment -Name $Name
+            Close-InstallationProgress -ProgressInfo $progressUI
             
             # Log: Instalacion completada
             $status = if ($deployResult.Success) { "Exitosa" } else { "Fallida" }
