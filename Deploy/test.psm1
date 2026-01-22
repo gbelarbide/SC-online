@@ -1,22 +1,38 @@
-<#
-.SYNOPSIS
-    Modulo de TESTING para instalacion de Office 64-bit
+function Write-GbLog {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Message,
+        
+        [Parameter(Mandatory = $false)]
+        [ValidateSet("INFO", "WARNING", "ERROR", "VERBOSE", "SUCCESS")]
+        [string]$Level = "INFO"
+    )
 
-.DESCRIPTION
-    IMPORTANTE: Este modulo es SOLO para TESTING y NO INSTALA NADA REAL.
-    
-    Simula el flujo de instalacion de Office 64-bit sin ejecutar instalaciones reales.
-    
-    Uso remoto:
-    (new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/test.psm1') | iex ; Start-Deploy
+    $logDir = "C:\temp"
+    $logFile = Join-Path $logDir "gbdeploy.log"
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logMessage = "[$timestamp] [$Level] $Message"
 
-.NOTES
-    Version:        0.2.0
-    Author:         Garikoitz Belarbide    
-    Creation Date:  19/01/2026
-    Purpose:        TESTING ONLY - Version simplificada
+    try {
+        if (-not (Test-Path $logDir)) {
+            New-Item -Path $logDir -ItemType Directory -Force | Out-Null
+        }
+        $logMessage | Out-File -FilePath $logFile -Append -Encoding UTF8
+    }
+    catch {
+        # Fallback silencioso si no se puede escribir en el log
+    }
 
-#>
+    # Mostrar en consola con colores
+    switch ($Level) {
+        "WARNING" { Write-Warning $Message }
+        "ERROR" { Write-Error $Message }
+        "SUCCESS" { Write-Host $Message -ForegroundColor Green }
+        "VERBOSE" { Write-Verbose $Message }
+        default { Write-Host $Message -ForegroundColor Cyan }
+    }
+}
+
 
 Function Test-Installed {
     <#
@@ -27,7 +43,7 @@ Function Test-Installed {
     [CmdletBinding()]
     param()
     
-    Write-Host "`n=== VERIFICACION DE INSTALACION ===" -ForegroundColor Cyan
+    Write-GbLog -Message "=== VERIFICACION DE INSTALACION ===" -Level "INFO"
     
     # Verificar si existe el archivo de test
     $testFile = "C:\temp\test.txt"
@@ -43,13 +59,13 @@ Function Test-Installed {
     $hasDiskSpace = $freeSpaceGB -ge 1
     
     # Mostrar resultados
-    Write-Host "`nEstado de instalacion:" -ForegroundColor Yellow
-    Write-Host "  Archivo test: $testFile" -ForegroundColor Cyan
-    Write-Host "  Instalado: $isInstalled" -ForegroundColor $(if ($isInstalled) { "Green" } else { "Red" })
+    Write-GbLog -Message "Estado de instalacion:" -Level "INFO"
+    Write-GbLog -Message "  Archivo test: $testFile" -Level "INFO"
+    Write-GbLog -Message "  Instalado: $isInstalled" -Level $(if ($isInstalled) { "SUCCESS" } else { "WARNING" })
     
-    Write-Host "`nPrerequisitos:" -ForegroundColor Yellow
-    Write-Host "  Admin: $hasAdmin" -ForegroundColor $(if ($hasAdmin) { "Green" } else { "Red" })
-    Write-Host "  Espacio: $freeSpaceGB GB" -ForegroundColor $(if ($hasDiskSpace) { "Green" } else { "Red" })
+    Write-GbLog -Message "Prerequisitos:" -Level "INFO"
+    Write-GbLog -Message "  Admin: $hasAdmin" -Level $(if ($hasAdmin) { "SUCCESS" } else { "WARNING" })
+    Write-GbLog -Message "  Espacio: $freeSpaceGB GB" -Level $(if ($hasDiskSpace) { "SUCCESS" } else { "WARNING" })
     
     return [PSCustomObject]@{
         IsInstalled    = $isInstalled
@@ -71,13 +87,13 @@ Function Start-Preinstall {
         [string]$InstallPath = "C:\Temp\OfficeTest"
     )
     
-    Write-Host "`n=== PREPARACION ===" -ForegroundColor Cyan
-    Write-Host "[SIMULACION - No se descargaran archivos reales]" -ForegroundColor Magenta
+    Write-GbLog -Message "=== PREPARACION ===" -Level "INFO"
+    Write-GbLog -Message "[SIMULACION - No se descargaran archivos reales]" -Level "VERBOSE"
     
     # Crear directorio
     if (-not (Test-Path -Path $InstallPath)) {
         New-Item -Path $InstallPath -ItemType Directory -Force | Out-Null
-        Write-Host "[OK] Directorio creado: $InstallPath" -ForegroundColor Green
+        Write-GbLog -Message "[OK] Directorio creado: $InstallPath" -Level "SUCCESS"
     }
     
     # Crear configuracion XML
@@ -101,10 +117,10 @@ Function Start-Preinstall {
     
     $configPath = Join-Path -Path $InstallPath -ChildPath "configuration.xml"
     $configXML | Out-File -FilePath $configPath -Encoding UTF8 -Force
-    Write-Host "[OK] Configuracion XML creada" -ForegroundColor Green
+    Write-GbLog -Message "[OK] Configuracion XML creada" -Level "SUCCESS"
     
     $setupPath = Join-Path -Path $InstallPath -ChildPath "setup.exe"
-    Write-Host "[SIMULADO] Setup.exe estaria en: $setupPath" -ForegroundColor Magenta
+    Write-GbLog -Message "[SIMULADO] Setup.exe estaria en: $setupPath" -Level "VERBOSE"
     
     return [PSCustomObject]@{
         Success       = $true
@@ -126,16 +142,16 @@ Function Start-Install {
         [string]$ConfigXmlPath
     )
     
-    Write-Host "`n=== INSTALACION ===" -ForegroundColor Cyan
-    Write-Host "[SIMULACION - No se ejecutara instalacion real]" -ForegroundColor Magenta
+    Write-GbLog -Message "=== INSTALACION ===" -Level "INFO"
+    Write-GbLog -Message "[SIMULACION - No se ejecutara instalacion real]" -Level "VERBOSE"
     
     if (-not (Test-Path -Path $ConfigXmlPath)) {
         throw "No se encontro el archivo de configuracion"
     }
     
-    Write-Host "`nComando: $SetupExePath /configure `"$ConfigXmlPath`"" -ForegroundColor Cyan
+    Write-GbLog -Message "Comando: $SetupExePath /configure `"$ConfigXmlPath`"" -Level "INFO"
     
-    Write-Host "`n[SIMULADO] Iniciando instalacion..." -ForegroundColor Magenta
+    Write-GbLog -Message "[SIMULADO] Iniciando instalacion..." -Level "VERBOSE"
     
     # Simular instalacion de 30 segundos con progreso
     $totalSeconds = 30
@@ -143,7 +159,7 @@ Function Start-Install {
     for ($i = $interval; $i -le $totalSeconds; $i += $interval) {
         Start-Sleep -Seconds $interval
         $percentage = [math]::Round(($i / $totalSeconds) * 100)
-        Write-Host "[SIMULADO] Progreso: $percentage% ($i/$totalSeconds segundos)" -ForegroundColor Magenta
+        Write-GbLog -Message "[SIMULADO] Progreso: $percentage% ($i/$totalSeconds segundos)" -Level "VERBOSE"
     }
     
     # Crear el archivo de test
@@ -157,8 +173,8 @@ Function Start-Install {
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     "Instalacion completada: $timestamp" | Out-File -FilePath $testFile -Encoding UTF8 -Force
     
-    Write-Host "[SIMULADO] Instalacion completada" -ForegroundColor Magenta
-    Write-Host "[OK] Archivo creado: $testFile" -ForegroundColor Green
+    Write-GbLog -Message "[SIMULADO] Instalacion completada" -Level "SUCCESS"
+    Write-GbLog -Message "[OK] Archivo creado: $testFile" -Level "SUCCESS"
     
     return [PSCustomObject]@{
         Success  = $true
@@ -180,27 +196,27 @@ Function Start-PostInstall {
         [switch]$KeepFiles
     )
     
-    Write-Host "`n=== VERIFICACION POST-INSTALACION ===" -ForegroundColor Cyan
+    Write-GbLog -Message "=== VERIFICACION POST-INSTALACION ===" -Level "INFO"
     
     # Verificar estado actual
     $verification = Test-Installed
     
     if ($verification.IsInstalled) {
-        Write-Host "[OK] Instalacion verificada correctamente" -ForegroundColor Green
-        Write-Host "Archivo: $($verification.TestFile)" -ForegroundColor Cyan
+        Write-GbLog -Message "[OK] Instalacion verificada correctamente" -Level "SUCCESS"
+        Write-GbLog -Message "Archivo: $($verification.TestFile)" -Level "INFO"
     }
     else {
-        Write-Warning "No se pudo verificar la instalacion"
+        Write-GbLog -Message "No se pudo verificar la instalacion" -Level "WARNING"
     }
     
     # Limpiar archivos
     if (-not $KeepFiles -and (Test-Path -Path $InstallPath)) {
         try {
             Remove-Item -Path $InstallPath -Recurse -Force -ErrorAction Stop
-            Write-Host "[OK] Archivos temporales eliminados" -ForegroundColor Green
+            Write-GbLog -Message "[OK] Archivos temporales eliminados" -Level "SUCCESS"
         }
         catch {
-            Write-Warning "No se pudieron eliminar archivos: $_"
+            Write-GbLog -Message "No se pudieron eliminar archivos: $_" -Level "WARNING"
         }
     }
     
@@ -223,24 +239,24 @@ Function Start-Deploy {
         [switch]$KeepTempFiles
     )
     
-    Write-Host "`n================================================================" -ForegroundColor Cyan
-    Write-Host "  TEST: DESPLIEGUE DE MICROSOFT OFFICE 64-BIT" -ForegroundColor Cyan
-    Write-Host "  MODO: SIMULACION (No se instalara nada real)" -ForegroundColor Magenta
-    Write-Host "================================================================" -ForegroundColor Cyan
+    Write-GbLog -Message "================================================================" -Level "INFO"
+    Write-GbLog -Message "  TEST: DESPLIEGUE DE MICROSOFT OFFICE 64-BIT" -Level "INFO"
+    Write-GbLog -Message "  MODO: SIMULACION (No se instalara nada real)" -Level "VERBOSE"
+    Write-GbLog -Message "================================================================" -Level "INFO"
     
     try {
         # FASE 1: Verificacion
-        Write-Host "`n--- FASE 1: VERIFICACION ---" -ForegroundColor Cyan
+        Write-GbLog -Message "--- FASE 1: VERIFICACION ---" -Level "INFO"
         $isInstalled = Test-Installed
         
         if ($isInstalled -and -not $Force) {
-            Write-Host "`n[OK] Ya esta instalado (archivo test.txt existe)" -ForegroundColor Green
-            Write-Host "Use -Force para simular reinstalacion" -ForegroundColor Yellow
+            Write-GbLog -Message "[OK] Ya esta instalado (archivo test.txt existe)" -Level "SUCCESS"
+            Write-GbLog -Message "Use -Force para simular reinstalacion" -Level "WARNING"
             return [PSCustomObject]@{ Success = $true; AlreadyInstalled = $true }
         }
         
         # FASE 2: Preparacion
-        Write-Host "`n--- FASE 2: PREPARACION ---" -ForegroundColor Cyan
+        Write-GbLog -Message "--- FASE 2: PREPARACION ---" -Level "INFO"
         $preinstall = Start-Preinstall -InstallPath $InstallPath
         
         if (-not $preinstall.Success) {
@@ -248,7 +264,7 @@ Function Start-Deploy {
         }
         
         # FASE 3: Instalacion
-        Write-Host "`n--- FASE 3: INSTALACION ---" -ForegroundColor Cyan
+        Write-GbLog -Message "--- FASE 3: INSTALACION ---" -Level "INFO"
         $install = Start-Install -SetupExePath $preinstall.SetupExePath `
             -ConfigXmlPath $preinstall.ConfigXmlPath
         
@@ -257,16 +273,16 @@ Function Start-Deploy {
         }
         
         # FASE 4: Verificacion
-        Write-Host "`n--- FASE 4: VERIFICACION ---" -ForegroundColor Cyan
+        Write-GbLog -Message "--- FASE 4: VERIFICACION ---" -Level "INFO"
         $postInstall = Start-PostInstall -InstallPath $InstallPath -KeepFiles:$KeepTempFiles
         
         # Resumen
-        Write-Host "`n================================================================" -ForegroundColor Green
-        Write-Host "  [OK] SIMULACION COMPLETADA EXITOSAMENTE" -ForegroundColor Green
-        Write-Host "================================================================" -ForegroundColor Green
-        Write-Host "`nResumen:" -ForegroundColor Cyan
-        Write-Host "  Archivo creado: $($install.TestFile)" -ForegroundColor Green
-        Write-Host "  Duracion simulada: $($install.Duration.ToString('mm\:ss'))" -ForegroundColor Cyan
+        Write-GbLog -Message "================================================================" -Level "SUCCESS"
+        Write-GbLog -Message "  [OK] SIMULACION COMPLETADA EXITOSAMENTE" -Level "SUCCESS"
+        Write-GbLog -Message "================================================================" -Level "SUCCESS"
+        Write-GbLog -Message "Resumen:" -Level "INFO"
+        Write-GbLog -Message "  Archivo creado: $($install.TestFile)" -Level "SUCCESS"
+        Write-GbLog -Message "  Duracion simulada: $($install.Duration.ToString('mm\:ss'))" -Level "INFO"
         
         return [PSCustomObject]@{
             Success           = $true
@@ -277,10 +293,10 @@ Function Start-Deploy {
         }
     }
     catch {
-        Write-Host "`n================================================================" -ForegroundColor Red
-        Write-Host "  [ERROR] ERROR EN EL DESPLIEGUE" -ForegroundColor Red
-        Write-Host "================================================================" -ForegroundColor Red
-        Write-Host "Error: $_" -ForegroundColor Red
+        Write-GbLog -Message "================================================================" -Level "ERROR"
+        Write-GbLog -Message "  [ERROR] ERROR EN EL DESPLIEGUE" -Level "ERROR"
+        Write-GbLog -Message "================================================================" -Level "ERROR"
+        Write-GbLog -Message "Error: $_" -Level "ERROR"
         
         return [PSCustomObject]@{
             Success      = $false

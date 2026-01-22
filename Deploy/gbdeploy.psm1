@@ -524,409 +524,229 @@ function Show-UserPrompt {
         
         $resultPath = "$tempFolder\UserPrompt_Result_$(Get-Random).txt"
         
-        # Decidir si usar HTA (con countdown) o VBScript (sin countdown)
-        $useHTA = ($TimeoutSeconds -gt 0)
-        
-        if ($useHTA) {
-            # Usar HTA con cuenta atrás
-            Write-Verbose "Usando HTA con timeout de $TimeoutSeconds segundos"
-            
-            # Escapar mensaje para HTML
-            $escapedMessage = $Message -replace '&', '&amp;' -replace '<', '&lt;' -replace '>', '&gt;' -replace '"', '&quot;' -replace "'", '&#39;' -replace '\r?\n', '<br>'
-            $escapedTitle = $Title -replace '&', '&amp;' -replace '<', '&lt;' -replace '>', '&gt;' -replace '"', '&quot;'
-            
-            # Determinar botones HTML
-            $buttonsHtml = if ($Buttons -eq "YesNo") {
-                @"
-                <button onclick="saveResult('Yes')" style="padding: 10px 30px; margin: 5px; font-size: 14px;">Sí</button>
-                <button onclick="saveResult('No')" style="padding: 10px 30px; margin: 5px; font-size: 14px;">No</button>
-"@
-            }
-            elseif ($Buttons -eq "OK") {
-                @"
-                <button onclick="saveResult('OK')" style="padding: 10px 30px; margin: 5px; font-size: 14px;">OK</button>
-"@
-            }
-            else {
-                @"
-                <button onclick="saveResult('OK')" style="padding: 10px 30px; margin: 5px; font-size: 14px;">OK</button>
-                <button onclick="saveResult('Cancel')" style="padding: 10px 30px; margin: 5px; font-size: 14px;">Cancelar</button>
-"@
-            }
-            
-            # Crear contenido HTA
-            $htaContent = @"
-<html>
-<head>
-    <title>$escapedTitle</title>
-    <HTA:APPLICATION
-        APPLICATIONNAME="UserPrompt"
-        BORDER="dialog"
-        BORDERSTYLE="normal"
-        CAPTION="yes"
-        MAXIMIZEBUTTON="no"
-        MINIMIZEBUTTON="no"
-        SCROLL="no"
-        SHOWINTASKBAR="yes"
-        SINGLEINSTANCE="yes"
-        SYSMENU="yes"
-        WINDOWSTATE="normal"
-    />
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f0f0f0;
-        }
-        .container {
-            background-color: white;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            max-width: 500px;
-            margin: 0 auto;
-        }
-        .message {
-            margin-bottom: 20px;
-            font-size: 14px;
-            line-height: 1.6;
-            color: #333;
-            max-height: 250px;
-            overflow-y: auto;
-            padding-right: 10px;
-        }
-        .countdown {
-            font-size: 24px;
-            font-weight: bold;
-            color: #0078d4;
-            text-align: center;
-            margin: 20px 0;
-            padding: 15px;
-            background-color: #f8f8f8;
-            border-radius: 5px;
-        }
-        .buttons {
-            text-align: center;
-            margin-top: 20px;
-        }
-        button {
-            background-color: #0078d4;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: 500;
-        }
-        button:hover {
-            background-color: #005a9e;
-        }
-        button:last-child {
-            background-color: #6c757d;
-        }
-        button:last-child:hover {
-            background-color: #5a6268;
-        }
-    </style>
-    <script>
-        var timeLeft = $TimeoutSeconds;
-        var resultPath = "$($resultPath -replace '\\', '\\')";
-        
-        function formatTime(seconds) {
-            var hours = Math.floor(seconds / 3600);
-            var minutes = Math.floor((seconds % 3600) / 60);
-            var secs = seconds % 60;
-            
-            if (hours > 0) {
-                return hours + ':' + pad(minutes) + ':' + pad(secs);
-            } else {
-                return minutes + ':' + pad(secs);
+        # Obtener branding para coherencia visual
+        $brandingMessage = "DeployCnf"
+        try {
+            if (Get-Command Get-DeployCnf -ErrorAction SilentlyContinue) {
+                $cnfResult = Get-DeployCnf
+                if ($cnfResult) {
+                    try {
+                        $cnfObject = $cnfResult | ConvertFrom-Json
+                        if ($cnfObject.Message) { $brandingMessage = $cnfObject.Message }
+                        else { $brandingMessage = $cnfResult }
+                    }
+                    catch { $brandingMessage = $cnfResult }
+                }
             }
         }
+        catch { }
         
-        function pad(num) {
-            return (num < 10 ? '0' : '') + num;
-        }
+        # Escapar variables para el script
+        $escapedBranding = $brandingMessage -replace "'", "''" -replace "`r`n", "`n" -replace "`n", " - "
+        $escapedAppName = $Name -replace "'", "''"
+        $escapedMessage = $Message -replace "'", "''"
+        $escapedTitle = $Title -replace "'", "''"
         
-        function updateCountdown() {
-            if (timeLeft <= 0) {
-                saveResult('OK');
-                window.close();
-                return;
-            }
-            
-            document.getElementById('countdown').innerText = 'Tiempo restante: ' + formatTime(timeLeft);
-            timeLeft--;
-        }
+        $resultPath = "$tempFolder\UserPrompt_Result_$(Get-Random).txt"
+        $scriptPath = "$tempFolder\UserPrompt_$(Get-Random).ps1"
         
-        function saveResult(result) {
-            try {
-                var fso = new ActiveXObject('Scripting.FileSystemObject');
-                var file = fso.CreateTextFile(resultPath, true);
-                file.WriteLine(result);
-                file.Close();
-            } catch(e) {
-                // Error al guardar, pero cerrar de todos modos
-            }
-            window.close();
-        }
-        
-        window.onload = function() {
-            // Centrar ventana con mayor altura
-            window.resizeTo(550, 500);
-            window.moveTo((screen.width - 550) / 2, (screen.height - 500) / 2);
-            
-            // Mantener ventana en primer plano
-            setInterval(function() {
-                try {
-                    window.focus();
-                } catch(e) {}
-            }, 1000);
-            
-            // Iniciar cuenta atrás
-            updateCountdown();
-            setInterval(updateCountdown, 1000);
-        };
-    </script>
-</head>
-<body>
-    <div class="container">
-        <div class="message">$escapedMessage</div>
-        <div id="countdown" class="countdown">Tiempo restante: $(if ($TimeoutSeconds -ge 3600) { [Math]::Floor($TimeoutSeconds / 3600).ToString() + ':' } else { '' })$([Math]::Floor(($TimeoutSeconds % 3600) / 60).ToString('00')):$($TimeoutSeconds % 60).ToString('00')</div>
-        <div class="buttons">
-            $buttonsHtml
-        </div>
-    </div>
-</body>
-</html>
-"@
-            
-            # Guardar el HTA
-            $htaPath = "$tempFolder\UserPrompt_$(Get-Random).hta"
-            Set-Content -Path $htaPath -Value $htaContent -Encoding UTF8 -Force
-            $scriptPath = $htaPath
-            $scriptExecutable = "mshta.exe"
+        # Script que muestra la ventana con técnica TopMost + ShowDialog
+        $scriptContent = @"
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
+# TÉCNICA CLAVE: Ventana padre invisible con TopMost
+`$topWindow = New-Object System.Windows.Forms.Form
+`$topWindow.TopMost = `$true
+`$topWindow.WindowState = 'Minimized'
+`$topWindow.ShowInTaskbar = `$false
+
+# Ventana principal
+`$form = New-Object System.Windows.Forms.Form
+`$form.Text = '$escapedTitle'
+`$form.Size = New-Object System.Drawing.Size(550, 480)
+`$form.StartPosition = 'CenterScreen'
+`$form.FormBorderStyle = 'FixedDialog'
+`$form.MaximizeBox = `$false
+`$form.MinimizeBox = `$false
+`$form.TopMost = `$true
+`$form.BackColor = [System.Drawing.Color]::FromArgb(245, 245, 245)
+`$form.ShowInTaskbar = `$true
+
+# Branding
+`$labelBranding = New-Object System.Windows.Forms.Label
+`$labelBranding.Text = '$escapedBranding'
+`$labelBranding.Font = New-Object System.Drawing.Font('Segoe UI', 10)
+`$labelBranding.ForeColor = [System.Drawing.Color]::FromArgb(102, 102, 102)
+`$labelBranding.Size = New-Object System.Drawing.Size(490, 50)
+`$labelBranding.Location = New-Object System.Drawing.Point(30, 20)
+`$labelBranding.TextAlign = 'MiddleCenter'
+
+# Título de Acción
+`$labelTitle = New-Object System.Windows.Forms.Label
+`$labelTitle.Text = 'ATENCIÓN REQUERIDA'
+`$labelTitle.Font = New-Object System.Drawing.Font('Segoe UI', 18, [System.Drawing.FontStyle]::Bold)
+`$labelTitle.ForeColor = [System.Drawing.Color]::Black
+`$labelTitle.Size = New-Object System.Drawing.Size(490, 40)
+`$labelTitle.Location = New-Object System.Drawing.Point(30, 80)
+`$labelTitle.TextAlign = 'MiddleCenter'
+
+# Mensaje
+`$labelMsg = New-Object System.Windows.Forms.Label
+`$labelMsg.Text = '$escapedMessage'
+`$labelMsg.Font = New-Object System.Drawing.Font('Segoe UI', 11)
+`$labelMsg.ForeColor = [System.Drawing.Color]::FromArgb(51, 51, 51)
+`$labelMsg.Size = New-Object System.Drawing.Size(450, 160)
+`$labelMsg.Location = New-Object System.Drawing.Point(50, 130)
+`$labelMsg.TextAlign = 'TopCenter'
+
+# Countdown Label
+`$labelCountdown = New-Object System.Windows.Forms.Label
+`$labelCountdown.Text = ''
+`$labelCountdown.Font = New-Object System.Drawing.Font('Segoe UI', 11, [System.Drawing.FontStyle]::Bold)
+`$labelCountdown.ForeColor = [System.Drawing.Color]::FromArgb(0, 120, 212)
+`$labelCountdown.Size = New-Object System.Drawing.Size(490, 30)
+`$labelCountdown.Location = New-Object System.Drawing.Point(30, 300)
+`$labelCountdown.TextAlign = 'MiddleCenter'
+
+# Función para guardar resultado
+function Save-Result([string]`$res) {
+    Set-Content -Path '$($resultPath -replace '\\', '\\')' -Value `$res -Force
+    `$form.Close()
+}
+
+# Panel de botones
+`$btnPanel = New-Object System.Windows.Forms.FlowLayoutPanel
+`$btnPanel.FlowDirection = 'RightToLeft'
+`$btnPanel.Size = New-Object System.Drawing.Size(490, 60)
+`$btnPanel.Location = New-Object System.Drawing.Point(30, 350)
+
+if ('$Buttons' -eq 'YesNo') {
+    `$btnNo = New-Object System.Windows.Forms.Button
+    `$btnNo.Text = 'No'
+    `$btnNo.Size = New-Object System.Drawing.Size(120, 40)
+    `$btnNo.Font = New-Object System.Drawing.Font('Segoe UI', 10)
+    `$btnNo.BackColor = [System.Drawing.Color]::FromArgb(200, 200, 200)
+    `$btnNo.FlatStyle = 'Flat'
+    `$btnNo.Add_Click({ Save-Result 'No' })
+    
+    `$btnYes = New-Object System.Windows.Forms.Button
+    `$btnYes.Text = 'Sí'
+    `$btnYes.Size = New-Object System.Drawing.Size(120, 40)
+    `$btnYes.Font = New-Object System.Drawing.Font('Segoe UI', 10, [System.Drawing.FontStyle]::Bold)
+    `$btnYes.BackColor = [System.Drawing.Color]::FromArgb(0, 120, 212)
+    `$btnYes.ForeColor = [System.Drawing.Color]::White
+    `$btnYes.FlatStyle = 'Flat'
+    `$btnYes.Add_Click({ Save-Result 'Yes' })
+    
+    `$btnPanel.Controls.AddRange(@(`$btnNo, `$btnYes))
+}
+elseif ('$Buttons' -eq 'OK') {
+    `$btnOk = New-Object System.Windows.Forms.Button
+    `$btnOk.Text = 'Entendido'
+    `$btnOk.Size = New-Object System.Drawing.Size(120, 40)
+    `$btnOk.Font = New-Object System.Drawing.Font('Segoe UI', 10, [System.Drawing.FontStyle]::Bold)
+    `$btnOk.BackColor = [System.Drawing.Color]::FromArgb(0, 120, 212)
+    `$btnOk.ForeColor = [System.Drawing.Color]::White
+    `$btnOk.FlatStyle = 'Flat'
+    `$btnOk.Add_Click({ Save-Result 'OK' })
+    `$btnPanel.Controls.Add(`$btnOk)
+}
+else {
+    `$btnCancel = New-Object System.Windows.Forms.Button
+    `$btnCancel.Text = 'Más tarde'
+    `$btnCancel.Size = New-Object System.Drawing.Size(140, 40)
+    `$btnCancel.Font = New-Object System.Drawing.Font('Segoe UI', 10)
+    `$btnCancel.BackColor = [System.Drawing.Color]::FromArgb(200, 200, 200)
+    `$btnCancel.FlatStyle = 'Flat'
+    `$btnCancel.Add_Click({ Save-Result 'Cancel' })
+    
+    `$btnOk = New-Object System.Windows.Forms.Button
+    `$btnOk.Text = 'Instalar ahora'
+    `$btnOk.Size = New-Object System.Drawing.Size(140, 40)
+    `$btnOk.Font = New-Object System.Drawing.Font('Segoe UI', 10, [System.Drawing.FontStyle]::Bold)
+    `$btnOk.BackColor = [System.Drawing.Color]::FromArgb(0, 120, 212)
+    `$btnOk.ForeColor = [System.Drawing.Color]::White
+    `$btnOk.FlatStyle = 'Flat'
+    `$btnOk.Add_Click({ Save-Result 'OK' })
+    
+    `$btnPanel.Controls.AddRange(@(`$btnCancel, `$btnOk))
+}
+
+`$form.Controls.AddRange(@(`$labelBranding, `$labelTitle, `$labelMsg, `$labelCountdown, `$btnPanel))
+
+# Timer Animación / Timeout
+if ($TimeoutSeconds -gt 0) {
+    `$script:timeLeft = $TimeoutSeconds
+    `$timer = New-Object System.Windows.Forms.Timer
+    `$timer.Interval = 1000
+    `$timer.Add_Tick({
+        `$script:timeLeft--
+        if (`$script:timeLeft -le 0) {
+            `$timer.Stop()
+            Save-Result 'OK'
         }
         else {
-            # Usar VBScript tradicional (sin timeout)
-            Write-Verbose "Usando VBScript sin timeout"
-            
-            # Escapar caracteres especiales para VBScript
-            # Reemplazar saltos de linea con el codigo VBScript apropiado
-            $escapedMessage = $Message -replace '"', '""' -replace '\r?\n', '" & vbCrLf & "'
-            $escapedTitle = $Title -replace '"', '""'
-            
-            # Mapear tipos de botones a valores VBScript MsgBox
-            $buttonValue = if ($Buttons -eq "YesNo") { 4 } elseif ($Buttons -eq "OK") { 0 } else { 1 }
-            
-            # Mapear iconos a valores VBScript MsgBox
-            $iconValue = switch ($Icon) {
-                "Error" { 16 }
-                "Question" { 32 }
-                "Warning" { 48 }
-                "Information" { 64 }
-                default { 32 }
-            }
-            
-            $style = $buttonValue + $iconValue + 4096  # 4096 = vbSystemModal para que aparezca al frente
-            
-            # Crear script VBScript que se ejecutara en la sesion del usuario
-            $vbsContent = @"
-Dim objShell, result, fso, file
-Set objShell = CreateObject("WScript.Shell")
-
-result = MsgBox("$escapedMessage", $style, "$escapedTitle")
-
-' Mapear resultado a texto
-Dim resultText
-Select Case result
-    Case 1
-        resultText = "OK"
-    Case 2
-        resultText = "Cancel"
-    Case 6
-        resultText = "Yes"
-    Case 7
-        resultText = "No"
-    Case Else
-        resultText = "Cancel"
-End Select
-
-' Escribir resultado en archivo
-Set fso = CreateObject("Scripting.FileSystemObject")
-Set file = fso.CreateTextFile("$($resultPath -replace '\\', '\\')", True)
-file.WriteLine resultText
-file.Close
-
-WScript.Quit
-"@
-            
-            # Guardar el script VBScript en la ubicacion accesible
-            $vbsPath = "$tempFolder\UserPrompt_$(Get-Random).vbs"
-            Set-Content -Path $vbsPath -Value $vbsContent -Encoding ASCII -Force
-            $scriptPath = $vbsPath
-            $scriptExecutable = "wscript.exe"
+            `$m = [Math]::Floor(`$script:timeLeft / 60)
+            `$s = `$script:timeLeft % 60
+            `$labelCountdown.Text = "Se instalará automáticamente en: " + `$m + ":" + `$s.ToString("00")
         }
+    })
+    `$timer.Start()
+}
+
+# Prevenir cierre Alt+F4
+`$form.Add_FormClosing({
+    param(`$s, `$e)
+    if (`$e.CloseReason -eq [System.Windows.Forms.CloseReason]::UserClosing) { `$e.Cancel = `$true }
+})
+
+[void]`$form.ShowDialog(`$topWindow)
+`$topWindow.Dispose()
+"@
+        $scriptContent | Out-File -FilePath $scriptPath -Encoding UTF8 -Force
+        
+        $scriptExecutable = $executerPath
         
         if (-not $isSystem) {
-            # Si NO estamos ejecutando como SYSTEM, ejecutar directamente
-            Write-Verbose "Ejecutando script directamente en la sesion actual del usuario"
-            
-            if ($useHTA) {
-                # Para HTA, usar SetWindowPos para mantener siempre en primer plano
-                Write-Verbose "Usando SetWindowPos para mantener HTA en primer plano"
-                
-                # Iniciar el proceso HTA sin esperar
-                $process = Start-Process -FilePath "mshta.exe" -ArgumentList "`"$scriptPath`"" -PassThru -WindowStyle Normal
-                
-                # Definir la función SetWindowPos de user32.dll
-                $code = @'
-[DllImport("user32.dll")]
-public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
-'@
-                
-                try {
-                    $type = Add-Type -MemberDefinition $code -Name "Win32SetWindowPos" -Namespace "Win32Functions" -PassThru -ErrorAction SilentlyContinue
-                    
-                    # Esperar a que la ventana se cree
-                    Start-Sleep -Milliseconds 500
-                    
-                    # Obtener el handle de la ventana
-                    $mainWindowHandle = $process.MainWindowHandle
-                    
-                    # Si no se obtuvo el handle, intentar refrescar
-                    if ($mainWindowHandle -eq [IntPtr]::Zero) {
-                        $process.Refresh()
-                        $mainWindowHandle = $process.MainWindowHandle
-                    }
-                    
-                    if ($mainWindowHandle -ne [IntPtr]::Zero) {
-                        # -1 indica HWND_TOPMOST (Siempre al frente)
-                        # 0x0001 = SWP_NOSIZE, 0x0002 = SWP_NOMOVE
-                        $result = $type::SetWindowPos($mainWindowHandle, [IntPtr](-1), 0, 0, 0, 0, 0x0001 -bor 0x0002)
-                        Write-Verbose "SetWindowPos aplicado: $result"
-                    }
-                    else {
-                        Write-Verbose "No se pudo obtener el handle de la ventana HTA"
-                    }
-                }
-                catch {
-                    Write-Verbose "Error al aplicar SetWindowPos: $_"
-                    # Continuar de todos modos, el HTA tiene su propio window.focus()
-                }
-                
-                # Esperar a que el proceso termine
-                $process.WaitForExit()
-            }
-            else {
-                # Para VBScript, ejecutar normalmente (ya usa vbSystemModal)
-                $process = Start-Process -FilePath $scriptExecutable -ArgumentList "`"$scriptPath`"" -Wait -PassThru -WindowStyle Hidden
-            }
+            # Si NO estamos ejecutando como SYSTEM, ejecutar directamente usando Executer
+            Write-Verbose "Ejecutando prompt directamente usando Executer"
+            $process = Start-Process -FilePath $scriptExecutable -ArgumentList "-File `"$scriptPath`"" -Wait -PassThru -WindowStyle Hidden
         }
         else {
             # Si estamos ejecutando como SYSTEM, necesitamos ejecutar en la sesion del usuario
-            Write-Verbose "Ejecutando como SYSTEM, buscando sesion interactiva del usuario"
+            Write-Verbose "Ejecutando como SYSTEM, buscando sesion interactiva para prompt"
             
-            # Obtener la sesion interactiva del usuario
+            # Obtener la sesion interactiva
             $sessionId = (Get-Process -Name "explorer" -ErrorAction SilentlyContinue | Select-Object -First 1).SessionId
             
             if ($null -eq $sessionId) {
-                Write-Warning "No se encontro una sesion interactiva de usuario."
+                Write-GbLog -Message "No se encontro sesion interactiva para mostrar prompt" -Level "WARNING"
                 return "Cancel"
             }
             
-            Write-Verbose "Sesion interactiva encontrada: $sessionId"
+            # Crear la tarea programada para la sesión del usuario
+            $taskName = "UserPrompt_$(Get-Random)"
+            $action = New-ScheduledTaskAction -Execute $scriptExecutable -Argument "-File `"$scriptPath`""
+            $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddSeconds(1)
             
-            # Usar PsExec si esta disponible
-            $psExecPath = "C:\Windows\System32\PsExec.exe"
+            # Obtener el usuario de la sesion para la tarea
+            $sessionUser = (query user | Select-String -Pattern "^\s*\S+\s+console\s+$sessionId" | ForEach-Object {
+                    ($_ -split '\s+')[1]
+                }) | Select-Object -First 1
             
-            if (Test-Path $psExecPath) {
-                # Ejecutar con PsExec en la sesion interactiva
-                Write-Verbose "Usando PsExec para ejecutar en la sesion $sessionId"
-                $null = Start-Process -FilePath $psExecPath -ArgumentList "-accepteula -s -i $sessionId $scriptExecutable `"$scriptPath`"" -WindowStyle Hidden -PassThru
+            if (-not $sessionUser) { $sessionUser = (Get-WmiObject -Class Win32_ComputerSystem).UserName }
+            
+            if ($sessionUser) {
+                $principal = New-ScheduledTaskPrincipal -UserId $sessionUser -LogonType InteractiveToken -RunLevel Highest
+                $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+                
+                Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+                Start-ScheduledTask -TaskName $taskName | Out-Null
             }
             else {
-                # Metodo alternativo: usar WMI para crear proceso en la sesion del usuario
-                Write-Verbose "PsExec no disponible, usando WMI/PowerShell Remoting"
-                
-                # Crear un script que use schtasks de forma mas directa
-                $batchPath = "$tempFolder\UserPrompt_$(Get-Random).bat"
-                $batchContent = "@echo off`r`n$scriptExecutable `"$scriptPath`""
-                Set-Content -Path $batchPath -Value $batchContent -Encoding ASCII -Force
-                
-                # Obtener el usuario de la sesion
-                $sessionUser = (query user | Select-String -Pattern "^\s*\S+\s+console\s+$sessionId" | ForEach-Object {
-                        ($_ -split '\s+')[1]
-                    }) | Select-Object -First 1
-                
-                if (-not $sessionUser) {
-                    # Intentar obtener el usuario de otra forma
-                    $sessionUser = (Get-WmiObject -Class Win32_ComputerSystem).UserName
-                    if ($sessionUser) {
-                        $sessionUser = $sessionUser.Split('\')[-1]
-                    }
-                }
-                
-                Write-Verbose "Usuario de sesion: $sessionUser"
-                
-                if ($sessionUser) {
-                    # Crear tarea que se ejecute inmediatamente y se elimine
-                    $taskName = "UserPrompt_$(Get-Random)"
-                    $taskXml = @"
-<?xml version="1.0" encoding="UTF-16"?>
-<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
-  <RegistrationInfo>
-    <Description>User Prompt Dialog</Description>
-  </RegistrationInfo>
-  <Triggers />
-  <Principals>
-    <Principal id="Author">
-      <UserId>$sessionUser</UserId>
-      <LogonType>InteractiveToken</LogonType>
-      <RunLevel>HighestAvailable</RunLevel>
-    </Principal>
-  </Principals>
-  <Settings>
-    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
-    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
-    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
-    <AllowHardTerminate>true</AllowHardTerminate>
-    <StartWhenAvailable>true</StartWhenAvailable>
-    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
-    <AllowStartOnDemand>true</AllowStartOnDemand>
-    <Enabled>true</Enabled>
-    <Hidden>false</Hidden>
-    <RunOnlyIfIdle>false</RunOnlyIfIdle>
-    <WakeToRun>false</WakeToRun>
-    <ExecutionTimeLimit>PT1H</ExecutionTimeLimit>
-    <Priority>7</Priority>
-  </Settings>
-  <Actions Context="Author">
-    <Exec>
-      <Command>$scriptExecutable</Command>
-      <Arguments>"$scriptPath"</Arguments>
-    </Exec>
-  </Actions>
-</Task>
-"@
-                    
-                    $taskXmlPath = "$tempFolder\UserPrompt_$(Get-Random).xml"
-                    Set-Content -Path $taskXmlPath -Value $taskXml -Encoding Unicode -Force
-                    
-                    # Registrar y ejecutar la tarea
-                    schtasks /create /tn $taskName /xml $taskXmlPath /f | Out-Null
-                    Start-Sleep -Milliseconds 500
-                    schtasks /run /tn $taskName | Out-Null
-                    
-                    # Guardar el nombre de la tarea para limpiarla despues
-                    $script:taskNameToClean = $taskName
-                    $script:taskXmlPathToClean = $taskXmlPath
-                    $script:batchPathToClean = $batchPath
-                }
-                else {
-                    Write-Warning "No se pudo determinar el usuario de la sesion interactiva"
-                    return "Cancel"
-                }
+                Write-GbLog -Message "No se pudo determinar usuario de sesion $sessionId" -Level "WARNING"
+                return "Cancel"
             }
         }
         
@@ -1574,9 +1394,9 @@ function Start-GbDeploy {
             $isFirstRun = ($currentAttempt -eq 1 -and -not $existingTask)
             
             if ($isFirstRun) {
-                # PRIMERA EJECUCIÓN: Solo programar la tarea para 1 minuto después
+                # PRIMERA EJECUCIÓN: Solo programar la tarea para 10 segundos después
                 Write-GbLog -Message "=== PRIMERA EJECUCION ===" -Level "INFO"
-                Write-GbLog -Message "Programando primera verificacion en 1 minuto..." -Level "WARNING"
+                Write-GbLog -Message "Programando primera verificacion en 10 segundos..." -Level "WARNING"
                 
                 # Log: Primera ejecución
                 Add-DeploymentLog -AppName $Name -EventType "MessageShown" -Details "Primera ejecucion - programando tarea" -Attempt 1
@@ -1600,32 +1420,17 @@ function Start-GbDeploy {
 Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
 "@)
                 
-                # Calcular hora de siguiente ejecucion (1 minuto)
-                $nextRunTime = (Get-Date).AddMinutes(1)
+                # Calcular hora de siguiente ejecucion (10 segundos)
+                $nextRunTime = (Get-Date).AddSeconds(10)
                 
-                # Carpeta temporal y extracción del Executer
-                $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent()
-                $isSystem = $currentUser.IsSystem
-                $tempFolder = if ($isSystem) { "C:\ProgramData\Temp" } else { $env:TEMP }
-                if (-not (Test-Path $tempFolder)) {
-                    New-Item -Path $tempFolder -ItemType Directory -Force | Out-Null
-                }
+                # Codificar script para powershell
+                $scriptString = $scriptBlock.ToString()
+                $bytes = [System.Text.Encoding]::Unicode.GetBytes($scriptString)
+                $encodedCommand = [Convert]::ToBase64String($bytes)
 
-                $executerPath = Join-Path $tempFolder "Executer.exe"
-                if (-not (Test-Path $executerPath)) {
-                    Write-Verbose "Extrayendo Executer a $executerPath"
-                    # Asumimos que $Executer base64 está disponible en el scope
-                    $bytes = [Convert]::FromBase64String($Executer)
-                    [System.IO.File]::WriteAllBytes($executerPath, $bytes)
-                }
-
-                # Crear nueva tarea programada
+                # Crear nueva tarea programada usando powershell (SYSTEM no necesita Executer para esto)
                 Write-Verbose "Creando tarea para primera ejecucion real en $nextRunTime"
-                
-                # Nota: En la ejecución a través de la tarea programada, el scriptBlock se serializa en un archivo .ps1 intermedio
-                $interimScript = "$tempFolder\Interim_$(Get-Random).ps1"
-                $scriptBlock.ToString() | Out-File $interimScript -Encoding UTF8
-                $action = New-ScheduledTaskAction -Execute $executerPath -Argument "-File `"$interimScript`""
+                $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -EncodedCommand $encodedCommand"
                 
                 # Crear dos triggers: uno por tiempo y otro al logon
                 $triggerTime = New-ScheduledTaskTrigger -Once -At $nextRunTime
@@ -1637,7 +1442,7 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                 # Registrar con ambos triggers
                 Register-ScheduledTask -TaskName $taskName -TaskPath $taskPath -Action $action -Trigger @($triggerTime, $triggerLogon) -Principal $principal -Settings $settings -Description $metadata -Force | Out-Null
                 
-                Write-Host "Tarea programada creada. Primera verificacion en: $nextRunTime" -ForegroundColor Green
+                Write-GbLog -Message "Tarea programada creada. Primera verificacion en: $nextRunTime" -Level "SUCCESS"
                 
                 # Devolver JSON indicando que se programó la primera ejecución
                 $jsonResult = @{
