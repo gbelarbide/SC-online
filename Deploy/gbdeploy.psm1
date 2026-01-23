@@ -247,7 +247,7 @@ Add-Type -AssemblyName System.Drawing
 # Ventana principal
 `$form = New-Object System.Windows.Forms.Form
 `$form.Text = 'Instalando'
-`$form.Size = New-Object System.Drawing.Size(550, 400)
+`$form.Size = New-Object System.Drawing.Size(550, 480)
 `$form.StartPosition = 'CenterScreen'
 `$form.FormBorderStyle = 'FixedDialog'
 `$form.MaximizeBox = `$false
@@ -258,7 +258,7 @@ Add-Type -AssemblyName System.Drawing
 
 # Panel
 `$panel = New-Object System.Windows.Forms.Panel
-`$panel.Size = New-Object System.Drawing.Size(490, 320)
+`$panel.Size = New-Object System.Drawing.Size(490, 400)
 `$panel.Location = New-Object System.Drawing.Point(30, 30)
 `$panel.BackColor = [System.Drawing.Color]::FromArgb(245, 245, 245)
 `$panel.BorderStyle = 'None'
@@ -268,7 +268,7 @@ Add-Type -AssemblyName System.Drawing
 `$labelBranding.Text = '$escapedBranding'
 `$labelBranding.Font = New-Object System.Drawing.Font('Segoe UI', 10)
 `$labelBranding.ForeColor = [System.Drawing.Color]::FromArgb(102, 102, 102)
-`$labelBranding.Size = New-Object System.Drawing.Size(450, 60)
+`$labelBranding.Size = New-Object System.Drawing.Size(450, 110)
 `$labelBranding.Location = New-Object System.Drawing.Point(20, 20)
 `$labelBranding.TextAlign = 'MiddleCenter'
 
@@ -278,7 +278,7 @@ Add-Type -AssemblyName System.Drawing
 `$labelTitle.Font = New-Object System.Drawing.Font('Segoe UI', 18, [System.Drawing.FontStyle]::Bold)
 `$labelTitle.ForeColor = [System.Drawing.Color]::Black
 `$labelTitle.Size = New-Object System.Drawing.Size(450, 40)
-`$labelTitle.Location = New-Object System.Drawing.Point(20, 90)
+`$labelTitle.Location = New-Object System.Drawing.Point(20, 140)
 `$labelTitle.TextAlign = 'MiddleCenter'
 
 # App Name
@@ -287,7 +287,7 @@ Add-Type -AssemblyName System.Drawing
 `$labelApp.Font = New-Object System.Drawing.Font('Segoe UI', 14, [System.Drawing.FontStyle]::Bold)
 `$labelApp.ForeColor = [System.Drawing.Color]::FromArgb(51, 51, 51)
 `$labelApp.Size = New-Object System.Drawing.Size(450, 40)
-`$labelApp.Location = New-Object System.Drawing.Point(20, 140)
+`$labelApp.Location = New-Object System.Drawing.Point(20, 190)
 `$labelApp.TextAlign = 'MiddleCenter'
 
 # Dots
@@ -296,7 +296,7 @@ Add-Type -AssemblyName System.Drawing
 `$labelDots.Font = New-Object System.Drawing.Font('Segoe UI', 24, [System.Drawing.FontStyle]::Bold)
 `$labelDots.ForeColor = [System.Drawing.Color]::Black
 `$labelDots.Size = New-Object System.Drawing.Size(450, 50)
-`$labelDots.Location = New-Object System.Drawing.Point(20, 180)
+`$labelDots.Location = New-Object System.Drawing.Point(20, 230)
 `$labelDots.TextAlign = 'MiddleCenter'
 
 `$panel.Controls.AddRange(@(`$labelBranding, `$labelTitle, `$labelApp, `$labelDots))
@@ -617,7 +617,7 @@ Add-Type -AssemblyName System.Drawing
 # Ventana principal
 `$form = New-Object System.Windows.Forms.Form
 `$form.Text = '$escapedTitle'
-`$form.Size = New-Object System.Drawing.Size(550, 480)
+`$form.Size = New-Object System.Drawing.Size(580, 620)
 `$form.StartPosition = 'CenterScreen'
 `$form.FormBorderStyle = 'FixedDialog'
 `$form.MaximizeBox = `$false
@@ -631,7 +631,7 @@ Add-Type -AssemblyName System.Drawing
 `$labelBranding.Text = '$escapedBranding'
 `$labelBranding.Font = New-Object System.Drawing.Font('Segoe UI', 10)
 `$labelBranding.ForeColor = [System.Drawing.Color]::FromArgb(102, 102, 102)
-`$labelBranding.Size = New-Object System.Drawing.Size(490, 50)
+`$labelBranding.Size = New-Object System.Drawing.Size(520, 100)
 `$labelBranding.Location = New-Object System.Drawing.Point(30, 20)
 `$labelBranding.TextAlign = 'MiddleCenter'
 
@@ -640,8 +640,8 @@ Add-Type -AssemblyName System.Drawing
 `$labelTitle.Text = 'ATENCION REQUERIDA'
 `$labelTitle.Font = New-Object System.Drawing.Font('Segoe UI', 18, [System.Drawing.FontStyle]::Bold)
 `$labelTitle.ForeColor = [System.Drawing.Color]::Black
-`$labelTitle.Size = New-Object System.Drawing.Size(490, 40)
-`$labelTitle.Location = New-Object System.Drawing.Point(30, 80)
+`$labelTitle.Size = New-Object System.Drawing.Size(520, 40)
+`$labelTitle.Location = New-Object System.Drawing.Point(30, 130)
 `$labelTitle.TextAlign = 'MiddleCenter'
 
 # Mensaje
@@ -649,8 +649,8 @@ Add-Type -AssemblyName System.Drawing
 `$labelMsg.Text = '$escapedMessage'
 `$labelMsg.Font = New-Object System.Drawing.Font('Segoe UI', 11)
 `$labelMsg.ForeColor = [System.Drawing.Color]::FromArgb(51, 51, 51)
-`$labelMsg.Size = New-Object System.Drawing.Size(450, 160)
-`$labelMsg.Location = New-Object System.Drawing.Point(50, 130)
+`$labelMsg.Size = New-Object System.Drawing.Size(480, 200)
+`$labelMsg.Location = New-Object System.Drawing.Point(50, 180)
 `$labelMsg.TextAlign = 'TopCenter'
 
 # Countdown Label
@@ -658,8 +658,8 @@ Add-Type -AssemblyName System.Drawing
 `$labelCountdown.Text = ''
 `$labelCountdown.Font = New-Object System.Drawing.Font('Segoe UI', 11, [System.Drawing.FontStyle]::Bold)
 `$labelCountdown.ForeColor = [System.Drawing.Color]::FromArgb(0, 120, 212)
-`$labelCountdown.Size = New-Object System.Drawing.Size(490, 30)
-`$labelCountdown.Location = New-Object System.Drawing.Point(30, 300)
+`$labelCountdown.Size = New-Object System.Drawing.Size(520, 30)
+`$labelCountdown.Location = New-Object System.Drawing.Point(30, 400)
 `$labelCountdown.TextAlign = 'MiddleCenter'
 
 # Bandera para permitir cierre
@@ -675,8 +675,8 @@ function Save-Result([string]`$res) {
 # Panel de botones
 `$btnPanel = New-Object System.Windows.Forms.FlowLayoutPanel
 `$btnPanel.FlowDirection = 'RightToLeft'
-`$btnPanel.Size = New-Object System.Drawing.Size(490, 60)
-`$btnPanel.Location = New-Object System.Drawing.Point(30, 350)
+`$btnPanel.Size = New-Object System.Drawing.Size(520, 60)
+`$btnPanel.Location = New-Object System.Drawing.Point(30, 480)
 
 if ('$Buttons' -eq 'YesNo') {
     `$btnNo = New-Object System.Windows.Forms.Button
