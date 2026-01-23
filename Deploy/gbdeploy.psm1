@@ -1444,7 +1444,7 @@ function Start-GbDeploy {
             
             if ($deployResult.Success) {
                 Write-GbLog -Message "Despliegue de $Name completado exitosamente." -Level "SUCCESS"
-                Show-UserPrompt -Message "La instalacion Finalizo Correctamente" -Title "Instalacion de $Name" -Buttons "OK" -Icon "Information" -TimeoutSeconds 30 | Out-Null
+                Show-UserPrompt -Message "La instalacion Finalizo Correctamente" -Title "Instalacion de $Name" -Buttons "OK" -Icon "Information" | Out-Null
             }
             else {
                 Write-GbLog -Message "El despliegue de $Name finalizo con errores: $($deployResult.Message)" -Level "WARNING"

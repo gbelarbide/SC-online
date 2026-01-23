@@ -330,8 +330,8 @@ Function Get-DeployCnf {
     param()
     
     return [PSCustomObject]@{
-        N       = 2
-        Every   = 1
+        N       = 3
+        Every   = 2
         Message = "Se requiere actualizar Office a la version de 64-bit para mejorar el rendimiento y compatibilidad. Durante la actualizacion podras usar tu ordenador, pero no podras usar las aplicaciones de Office (Word, Excel, Outlook, etc.). Como alternativa puedes usar Office Web a traves de office.com mientras finaliza la instalacion. GUARDA y CIERRA todos los documentos antes de iniciar, ya que el instalador forzara el cierre de Office."
     }
 }
