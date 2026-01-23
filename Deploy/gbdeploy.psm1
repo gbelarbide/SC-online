@@ -1444,6 +1444,7 @@ function Start-GbDeploy {
             
             if ($deployResult.Success) {
                 Write-GbLog -Message "Despliegue de $Name completado exitosamente." -Level "SUCCESS"
+                Show-UserPrompt -Message "La instalacion Finalizo Correctamente" -Title "Instalacion de $Name" -Buttons "OK" -Icon "Information" -TimeoutSeconds 30 | Out-Null
             }
             else {
                 Write-GbLog -Message "El despliegue de $Name finalizo con errores: $($deployResult.Message)" -Level "WARNING"
@@ -1607,6 +1608,7 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                     
                     if ($deployResult.Success) {
                         Write-GbLog -Message "Despliegue de $Name completado exitosamente." -Level "SUCCESS"
+                        Show-UserPrompt -Message "La instalacion Finalizo Correctamente" -Title "Instalacion de $Name" -Buttons "OK" -Icon "Information" -TimeoutSeconds 30 | Out-Null
                         
                         # Devolver JSON con resultado exitoso
                         $jsonResult = @{
@@ -1665,6 +1667,7 @@ Start-GbDeploy -Name '$Name' -N $N -Every $Every$messageParam
                     
                     if ($deployResult.Success) {
                         Write-GbLog -Message "Despliegue de $Name completado exitosamente." -Level "SUCCESS"
+                        Show-UserPrompt -Message "La instalacion Finalizo Correctamente" -Title "Instalacion de $Name" -Buttons "OK" -Icon "Information" -TimeoutSeconds 30 | Out-Null
                         
                         # Devolver JSON con resultado exitoso
                         $jsonResult = @{
