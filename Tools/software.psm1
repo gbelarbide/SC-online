@@ -173,6 +173,37 @@ function Install-Idazki {
     Write-Host "Acciones finalizadas"
 }
 
+function Install-AutoFirma {
+    Write-Host "------------------------------"
+    Write-Host "AutoFirma"
+    Write-Host "------------------------------"
+    $tempZip = "c:\temp\autofirma.zip"
+    $tempDir = "c:\temp\autofirma"
+    $url = "https://firmaelectronica.gob.es/content/dam/firmaelectronica/descargas-software/autofirma19/Autofirma64.zip"
+
+    Write-Host "Bajando app"
+    Invoke-WebRequest $url -OutFile $tempZip -Verbose
+
+    Write-Host "Descomprimiendo app"
+    if (!(Test-Path $tempDir)) { New-Item -ItemType Directory -Path $tempDir -Force }
+    Expand-Archive -Path $tempZip -DestinationPath $tempDir -Force
+
+    Write-Host "Instalando app"
+    $installer = Get-ChildItem -Path $tempDir -Filter "*Autofirma*installer.exe" | Select-Object -First 1
+    if ($installer) {
+        Start-Process -FilePath $installer.FullName -ArgumentList "/S /SD IDYES" -Wait
+    }
+    else {
+        Write-Host "Error: No se encontró el instalador en el zip." -ForegroundColor Red
+    }
+
+    Write-Host "Limpiando temporales"
+    Remove-Item -Path $tempZip -Force
+    Remove-Item -Path $tempDir -Force -Recurse
+    Write-Host "Acciones finalizadas"
+}
+
+
 function Show-SoftwareMenu {
     Clear-Host
     Write-Host "Usuario: $env:UserName" -ForegroundColor Cyan
@@ -186,6 +217,7 @@ function Show-SoftwareMenu {
     Write-Host "7. Macrium Reflect"
     Write-Host "8. Izempe"
     Write-Host "9. Idazki Desktop"
+    Write-Host "10. AutoFirma"
     Write-Host ""
     Write-Host "98. Reopen as admin"
     Write-Host "99. Open admin ps shell"
@@ -220,6 +252,7 @@ function Start-GbInstala {
                 "7" { Install-Macrium }
                 "8" { Install-Izenpe }
                 "9" { Install-Idazki }
+                "10" { Install-AutoFirma }
                 "98" { 
                     Write-Host "Reabriendo como admin..."
                     Start-Process powershell.exe -Verb RunAs
