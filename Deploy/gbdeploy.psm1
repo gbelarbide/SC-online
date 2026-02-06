@@ -1,4 +1,6 @@
 <#
+https://psappdeploytoolkit.com/blog/2024/12/05/psadt-4.0
+
 (new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/gbdeploy.psm1') | Invoke-Expression; Start-GbDeploy -Name "Test"
 (new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/gbdeploy.psm1') | Invoke-Expression; Start-GbDeploy -Name "office64"
 (new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/gbdeploy.psm1') | Invoke-Expression; Get-DeploymentLog -AppName "office64"

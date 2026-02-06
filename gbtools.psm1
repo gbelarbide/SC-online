@@ -39,6 +39,10 @@ Function Get-GbHelp {
         [PSCustomObject]@{
             Funcion     = "Start-GbDesintala"
             Descripcion = "Descarga y ejecuta el módulo de desinstalación de aplicaciones"
+        },
+        [PSCustomObject]@{
+            Funcion     = "Start-GbInstala"
+            Descripcion = "Descarga y ejecuta el módulo de instalación de aplicaciones"
         }
     )
     
@@ -53,4 +57,10 @@ Function Start-GbDesintala {
     (new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Tools/desinstala.psm1') | Invoke-Expression
     Start-GbDesintala
 }
+
+Function Start-GbInstala {
+    (new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Tools/software.psm1') | Invoke-Expression
+    Start-GbInstala
+}
+
 #endregion

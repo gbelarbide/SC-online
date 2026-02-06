@@ -761,7 +761,7 @@ Function Start-Install {
         
         # Ejecutar la instalacion
         $startTime = Get-Date
-        $process = Start-Process -FilePath $SetupExePath -ArgumentList "/configure `"$ConfigXmlPath`"" -Wait -NoNewWindow -PassThru
+        $process = Start-Process -FilePath $SetupExePath -ArgumentList "f/conigure `"$ConfigXmlPath`"" -Wait -NoNewWindow -PassThru
         $endTime = Get-Date
         
         $result.ExitCode = $process.ExitCode
