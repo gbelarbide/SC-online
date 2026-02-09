@@ -43,6 +43,10 @@ Function Get-GbHelp {
         [PSCustomObject]@{
             Funcion     = "Start-GbInstala"
             Descripcion = "Descarga y ejecuta el módulo de instalación de aplicaciones"
+        },
+        [PSCustomObject]@{
+            Funcion     = "Start-GbLimpia"
+            Descripcion = "Descarga y ejecuta el módulo de limpieza del sistema"
         }
     )
     
@@ -62,5 +66,11 @@ Function Start-GbInstala {
     (new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Tools/software.psm1') | Invoke-Expression
     Start-GbInstala
 }
+
+Function Start-GbLimpia {
+    (new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Tools/limpia.psm1') | Invoke-Expression
+    Start-GbLimpia
+}
+
 
 #endregion
