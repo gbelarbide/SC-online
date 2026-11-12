@@ -5,7 +5,7 @@
 
 
 .DESCRIPTION
-    (new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/office64.psm1') | iex ; Start-Install
+    (new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/gbelarbide/SC-online/refs/heads/main/Deploy/office64.psm1') | iex ; Start-Deploy
     
    
 
@@ -736,6 +736,9 @@ Function Start-Install {
     
     try {
         Write-Host "`n=== INSTALACION DE OFFICE 64-BIT ===" -ForegroundColor Cyan
+        Write-Host "`n $SetupExePath"
+        Write-Host "`n $ConfigXmlPath"
+        Write-Host "`n $ConfigXmlPath"
         
         # Verificar que los archivos existen
         if (-not (Test-Path -Path $SetupExePath)) {
@@ -761,7 +764,7 @@ Function Start-Install {
         
         # Ejecutar la instalacion
         $startTime = Get-Date
-        $process = Start-Process -FilePath $SetupExePath -ArgumentList "f/conigure `"$ConfigXmlPath`"" -Wait -NoNewWindow -PassThru
+        $process = Start-Process -FilePath $SetupExePath -ArgumentList "/configure `"$ConfigXmlPath`"" -Wait -NoNewWindow -PassThru
         $endTime = Get-Date
         
         $result.ExitCode = $process.ExitCode
