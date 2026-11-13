@@ -1,3 +1,137 @@
+
+#Invoke-WingetDeployment -AppId "OSGeo.QGIS" -Source "winget" -Mode "InstallOrUpdate" -TimeoutSeconds 1200
+
+function Invoke-WingetDeployment {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$AppId,
+
+        [ValidateSet("InstallOrUpdate", "Uninstall")]
+        [string]$Mode = "InstallOrUpdate",
+
+        [ValidateSet("Machine", "User", "Default")]
+        [string]$Scope = "Machine",
+
+        # Most applications use winget.
+        # Microsoft Store applications can use msstore.
+        [ValidateSet("winget", "msstore")]
+        [string]$Source = "winget",
+
+        # Optional installer type.
+        [string]$InstallerType,
+
+        # Optional physical path used to verify the required installation exists.
+        [string]$DetectionPath,
+
+        # Force an installation attempt
+        [switch]$ForceReinstall,
+
+        # If upgrade/forced install fails, optionally uninstall then install
+        [switch]$UninstallThenInstall,
+
+        # Reset Winget sources before operation
+        [switch]$ResetSources,
+
+        # Log directory
+        [string]$LogRoot = "C:\ProgramData\customapps",
+
+        # Maximum time to wait for Winget operations
+        [int]$TimeoutSeconds = 600,
+
+        # Number of retry attempts after the first attempt
+        [int]$MaxRetries = 2
+    )
+
+    process {
+        # ============================================================
+        # Input validation
+        # ============================================================
+
+        if ([string]::IsNullOrWhiteSpace($AppId)) {
+            Write-Error "AppId cannot be empty or whitespace."
+            return
+        }
+
+        if ($AppId -notmatch '^[a-zA-Z0-9._-]+$') {
+            Write-Warning "AppId '$AppId' contains unusual characters."
+        }
+
+        # ============================================================
+        # Logging
+        # ============================================================
+
+        try {
+            New-Item `
+                -ItemType Directory `
+                -Path $LogRoot `
+                -Force `
+                -ErrorAction Stop |
+            Out-Null
+        }
+        catch {
+            Write-Error "Failed to create log directory '$LogRoot': $($_.Exception.Message)"
+            return
+        }
+
+        $SafeAppId = $AppId -replace '[\\/:*?"<>|]', '_'
+
+        $ScriptLog = Join-Path `
+            $LogRoot `
+        ("winget-wrapper-{0}.log" -f $SafeAppId)
+
+        $WingetLog = Join-Path `
+            $LogRoot `
+        ("winget-{0}-{1}.log" -f $SafeAppId, (Get-Date -Format "yyyyMMdd-HHmmss"))
+
+        function Write-Log {
+            param(
+                [Parameter(Mandatory)]
+                [string]$Message,
+
+                [ValidateSet("INFO", "WARN", "ERROR")]
+                [string]$Level = "INFO",
+
+                [switch]$SuppressConsole
+            )
+
+            $Line = "[{0}] [{1}] {2}" -f `
+            (Get-Date -Format "yyyy-MM-dd HH:mm:ss"),
+            $Level,
+            $Message
+
+            try {
+                $Line |
+                Out-File `
+                    -FilePath $ScriptLog `
+                    -Append `
+                    -Encoding utf8 `
+                    -ErrorAction Stop
+            }
+            catch {
+                Write-Warning "Failed to write log entry: $($_.Exception.Message)"
+            }
+
+            if (-not $SuppressConsole) {
+                switch ($Level) {
+                    "ERROR" {
+                        Write-Host $Line -ForegroundColor Red
+                    }
+                    "WARN" {
+                        Write-Host $Line -ForegroundColor Yellow
+                    }
+                    default {
+                        Write-Verbose $Line
+                    }
+                }
+            }
+        }
+
+        Write-Log "Function initialized for AppId: $AppId"
+    }
+}
+
+<#
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
@@ -133,6 +267,10 @@ function Write-Log {
         }
     }
 }
+#>
+
+
+
 
 # ============================================================
 # Find Winget
@@ -157,8 +295,8 @@ function Get-WingetPath {
             -AllUsers `
             -Name "Microsoft.DesktopAppInstaller" `
             -ErrorAction Stop |
-            Sort-Object Version -Descending |
-            Select-Object -First 1
+        Sort-Object Version -Descending |
+        Select-Object -First 1
 
         if ($Package -and $Package.InstallLocation) {
 
@@ -191,8 +329,8 @@ function Get-WingetPath {
         $Resolved = Get-Item `
             $Path `
             -ErrorAction SilentlyContinue |
-            Sort-Object FullName -Descending |
-            Select-Object -First 1
+        Sort-Object FullName -Descending |
+        Select-Object -First 1
 
         if ($Resolved) {
 
@@ -273,13 +411,13 @@ if ($IsSystem) {
     foreach ($DependencyName in $WingetDependencyPackages) {
         try {
             $Dependency = Get-AppxPackage -AllUsers -Name $DependencyName -ErrorAction Stop |
-                Where-Object {
-                    $_.Architecture -eq "X64" -and
-                    -not [string]::IsNullOrWhiteSpace($_.InstallLocation) -and
-                    (Test-Path -LiteralPath $_.InstallLocation)
-                } |
-                Sort-Object Version -Descending |
-                Select-Object -First 1
+            Where-Object {
+                $_.Architecture -eq "X64" -and
+                -not [string]::IsNullOrWhiteSpace($_.InstallLocation) -and
+                (Test-Path -LiteralPath $_.InstallLocation)
+            } |
+            Sort-Object Version -Descending |
+            Select-Object -First 1
             if ($Dependency) {
                 Write-Log "Found WinGet dependency: $($Dependency.Name) $($Dependency.Version)"
                 Write-Log "Adding WinGet dependency to process PATH: $($Dependency.InstallLocation)"
@@ -287,10 +425,12 @@ if ($IsSystem) {
                 if ($ExistingPaths -notcontains $Dependency.InstallLocation) {
                     $env:PATH = "$($Dependency.InstallLocation);$env:PATH"
                 }
-            } else {
+            }
+            else {
                 Write-Log "WinGet dependency not found: $DependencyName" "WARN"
             }
-        } catch {
+        }
+        catch {
             Write-Log "Failed to query WinGet dependency '$DependencyName': $($_.Exception.Message)" "WARN"
         }
     }
@@ -437,10 +577,10 @@ function Invoke-WingetCapture {
             Write-Log "Winget output:`n$Output"
 
             $Output |
-                Out-File `
-                    -FilePath $WingetLog `
-                    -Append `
-                    -Encoding utf8
+            Out-File `
+                -FilePath $WingetLog `
+                -Append `
+                -Encoding utf8
         }
 
         Write-Log "Winget exit code: $ExitCode"
@@ -505,7 +645,7 @@ function Invoke-WingetWithRetry {
 
         if (
             $LastResult.Output -match `
-            "No available upgrade|No applicable upgrade|No newer package versions"
+                "No available upgrade|No applicable upgrade|No newer package versions"
         ) {
 
             return $LastResult
@@ -592,7 +732,7 @@ function Test-WingetInstalled {
 
     if (
         $Result.Output -match `
-        "No installed package found|No installed packages? found matching|No package found"
+            "No installed package found|No installed packages? found matching|No package found"
     ) {
 
         Write-Log `
@@ -846,7 +986,7 @@ try {
                 if (
                     $Result.ExitCode -eq 0 -or
                     $Result.Output -match `
-                    "No available upgrade|No applicable upgrade|No newer package versions"
+                        "No available upgrade|No applicable upgrade|No newer package versions"
                 ) {
 
                     $ReturnCode = 0
@@ -912,7 +1052,7 @@ try {
                 if (
                     $UpgradeResult.ExitCode -eq 0 -or
                     $UpgradeResult.Output -match `
-                    "No available upgrade|No applicable upgrade|No newer package versions"
+                        "No available upgrade|No applicable upgrade|No newer package versions"
                 ) {
 
                     Write-Log `
