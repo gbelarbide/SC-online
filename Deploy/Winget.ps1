@@ -1,5 +1,6 @@
 
 #Invoke-WingetDeployment -AppId "OSGeo.QGIS" -Source "winget" -Mode "InstallOrUpdate" -TimeoutSeconds 1200
+#(new-object Net.WebClient).DownloadString('https://raw.githubusercontent.com/TayStackLab/TayStack-Lab/refs/heads/main/Episode-03-Winget-Package-Deploy/Winget.ps1') | iex ; Start-Deploy
 
 function Invoke-WingetDeployment {
     [CmdletBinding()]
